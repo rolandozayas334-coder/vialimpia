@@ -23,7 +23,10 @@ import {
   Users,
   Shield,
   UserPlus,
-  Key
+  Key,
+  MapPin,
+  Building2,
+  Menu
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { jsPDF } from "jspdf";
@@ -35,6 +38,7 @@ interface Servicio {
   fecha: string; // YYYY-MM-DD
   numServicio: string;
   razonSocial: string;
+  regionComuna: string; // New field for region/commune
   servicioRealizado: string;
   numSidrep: string;
   pesoEstimado: string;
@@ -58,6 +62,7 @@ const DEFAULTS_SERVICIOS: Servicio[] = [
     fecha: "2026-07-01",
     numServicio: "1250",
     razonSocial: "Minera del Norte S.A.",
+    regionComuna: "Antofagasta / Sierra Gorda",
     servicioRealizado: "Traslado de concentrado de cobre y retiro de residuos",
     numSidrep: "SD-44510",
     pesoEstimado: "4500",
@@ -69,6 +74,7 @@ const DEFAULTS_SERVICIOS: Servicio[] = [
     fecha: "2026-07-01",
     numServicio: "1251",
     razonSocial: "Distribuidora del Sur",
+    regionComuna: "Biobío / Concepción",
     servicioRealizado: "Flete de mercadería seca y paletizada",
     numSidrep: "N/A",
     pesoEstimado: "0",
@@ -80,6 +86,7 @@ const DEFAULTS_SERVICIOS: Servicio[] = [
     fecha: "2026-07-02",
     numServicio: "1252",
     razonSocial: "Constructora Cordillera",
+    regionComuna: "Metropolitana / Colina",
     servicioRealizado: "Transporte de maquinaria pesada a faena",
     numSidrep: "N/A",
     pesoEstimado: "0",
@@ -91,6 +98,7 @@ const DEFAULTS_SERVICIOS: Servicio[] = [
     fecha: "2026-06-28",
     numServicio: "1210",
     razonSocial: "Industrias Químicas Omega",
+    regionComuna: "Valparaíso / Quintero",
     servicioRealizado: "Despacho de sustancias peligrosas en estanques",
     numSidrep: "SD-44320",
     pesoEstimado: "8200",
@@ -118,11 +126,125 @@ export default function App() {
     localStorage.setItem("servicios_via_limpia_v1", JSON.stringify(servicios));
   }, [servicios]);
 
+  // Reusable Catalog Item definition
+  const [catConductores, setCatConductores] = useState<{ id: string; nombre: string }[]>(() => {
+    const saved = localStorage.getItem("vialimpia_cat_conductores");
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) { console.error(e); }
+    }
+    return [
+      { id: "c1", nombre: "Carlos Mendoza" },
+      { id: "c2", nombre: "Juan Pablo Silva" },
+      { id: "c3", nombre: "Mauricio Ortega" },
+      { id: "c4", nombre: "Andrés Castro" },
+      { id: "c5", nombre: "Roberto Gómez" }
+    ];
+  });
+
+  const [catClientes, setCatClientes] = useState<{ id: string; nombre: string }[]>(() => {
+    const saved = localStorage.getItem("vialimpia_cat_clientes");
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) { console.error(e); }
+    }
+    return [
+      { id: "cl1", nombre: "Minera del Norte S.A." },
+      { id: "cl2", nombre: "Distribuidora del Sur" },
+      { id: "cl3", nombre: "Constructora Cordillera" },
+      { id: "cl4", nombre: "Industrias Químicas Omega" },
+      { id: "cl5", nombre: "Transportes TransAtacama" }
+    ];
+  });
+
+  const [catRegiones, setCatRegiones] = useState<{ id: string; nombre: string }[]>(() => {
+    const saved = localStorage.getItem("vialimpia_cat_regiones");
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) { console.error(e); }
+    }
+    return [
+      { id: "r1", nombre: "Antofagasta / Sierra Gorda" },
+      { id: "r2", nombre: "Biobío / Concepción" },
+      { id: "r3", nombre: "Metropolitana / Colina" },
+      { id: "r4", nombre: "Valparaíso / Quintero" },
+      { id: "r5", nombre: "Atacama / Copiapó" }
+    ];
+  });
+
+  const [catServicios, setCatServicios] = useState<{ id: string; nombre: string }[]>(() => {
+    const saved = localStorage.getItem("vialimpia_cat_servicios");
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) { console.error(e); }
+    }
+    return [
+      { id: "s1", nombre: "Traslado de concentrado de cobre y retiro de residuos" },
+      { id: "s2", nombre: "Flete de mercadería seca y paletizada" },
+      { id: "s3", nombre: "Transporte de maquinaria pesada a faena" },
+      { id: "s4", nombre: "Despacho de sustancias peligrosas en estanques" },
+      { id: "s5", nombre: "Servicio especial de carga sobredimensionada" }
+    ];
+  });
+
+  // Synchronize catalogs with localStorage
+  useEffect(() => {
+    localStorage.setItem("vialimpia_cat_conductores", JSON.stringify(catConductores));
+  }, [catConductores]);
+
+  useEffect(() => {
+    localStorage.setItem("vialimpia_cat_clientes", JSON.stringify(catClientes));
+  }, [catClientes]);
+
+  useEffect(() => {
+    localStorage.setItem("vialimpia_cat_regiones", JSON.stringify(catRegiones));
+  }, [catRegiones]);
+
+  useEffect(() => {
+    localStorage.setItem("vialimpia_cat_servicios", JSON.stringify(catServicios));
+  }, [catServicios]);
+
+  // Catalog Active Subtab state
+  const [tabActivoNomenclador, setTabActivoNomenclador] = useState<"conductores" | "clientes" | "regiones" | "servicios">("conductores");
+  
+  // Nomenclador creation states
+  const [nuevoNomencladorNombre, setNuevoNomencladorNombre] = useState<string>("");
+  const [editandoNomencladorId, setEditandoNomencladorId] = useState<string | null>(null);
+  const [editandoNomencladorNombre, setEditandoNomencladorNombre] = useState<string>("");
+
+  // Simulated Asynchronous Processing states
+  const [asyncOperando, setAsyncOperando] = useState<boolean>(false);
+  const [asyncMensaje, setAsyncMensaje] = useState<string>("");
+
+  // Asynchronous wrapper simulating secure database writes
+  const ejecutarOperacionAsincrona = async (mensaje: string, accion: () => void) => {
+    setAsyncOperando(true);
+    setAsyncMensaje(mensaje);
+    await new Promise(resolve => setTimeout(resolve, 800));
+    try {
+      accion();
+    } catch (err) {
+      console.error(err);
+      triggerNotificacion("Error en la transacción segura de datos.", "error");
+    } finally {
+      setAsyncOperando(false);
+      setAsyncMensaje("");
+    }
+  };
+
+  // Toggle mode states for forms (select from catalog vs custom inputs)
+  const [inputModeConductor, setInputModeConductor] = useState<"select" | "custom">("select");
+  const [inputModeCliente, setInputModeCliente] = useState<"select" | "custom">("select");
+  const [inputModeRegion, setInputModeRegion] = useState<"select" | "custom">("select");
+  const [inputModeServicio, setInputModeServicio] = useState<"select" | "custom">("select");
+
+  const [editInputModeConductor, setEditInputModeConductor] = useState<"select" | "custom">("select");
+  const [editInputModeCliente, setEditInputModeCliente] = useState<"select" | "custom">("select");
+  const [editInputModeRegion, setEditInputModeRegion] = useState<"select" | "custom">("select");
+  const [editInputModeServicio, setEditInputModeServicio] = useState<"select" | "custom">("select");
+
   // Form input state
   const [formData, setFormData] = useState<Omit<Servicio, "id">>({
     fecha: new Date().toISOString().split("T")[0],
     numServicio: "",
     razonSocial: "",
+    regionComuna: "",
     servicioRealizado: "",
     numSidrep: "",
     pesoEstimado: "",
@@ -210,7 +332,7 @@ export default function App() {
   const isLoggedIn = !!usuarioActual;
 
   // Navigation state
-  const [vistaActiva, setVistaActiva] = useState<"servicios" | "usuarios">("servicios");
+  const [vistaActiva, setVistaActiva] = useState<"servicios" | "usuarios" | "nomencladores">("servicios");
 
   // User form states (for creating a user)
   const [nuevoNombre, setNuevoNombre] = useState<string>("");
@@ -223,6 +345,7 @@ export default function App() {
 
   // User Profile States
   const [mostrarMenuPerfil, setMostrarMenuPerfil] = useState<boolean>(false);
+  const [menuMovilAbierto, setMenuMovilAbierto] = useState<boolean>(false);
   const [editandoPerfil, setEditandoPerfil] = useState<boolean>(false);
   const [perfilNombre, setPerfilNombre] = useState<string>("");
   const [perfilUsuario, setPerfilUsuario] = useState<string>("");
@@ -383,6 +506,102 @@ export default function App() {
     }
   };
 
+  const tienePermisoEscritura = usuarioActual?.rol === "Administrador" || usuarioActual?.rol === "Operador";
+
+  // CRUD actions for reusable catalogs (Nomencladores)
+  const handleCrearElementoNomenclador = (e: FormEvent) => {
+    e.preventDefault();
+    if (!tienePermisoEscritura) {
+      triggerNotificacion("No tienes permisos para modificar catálogos.", "error");
+      return;
+    }
+    if (!nuevoNomencladorNombre.trim()) {
+      triggerNotificacion("El nombre no puede estar vacío.", "error");
+      return;
+    }
+
+    const nuevoItem = {
+      id: Date.now().toString(),
+      nombre: nuevoNomencladorNombre.trim()
+    };
+
+    ejecutarOperacionAsincrona("Guardando nuevo elemento en catálogo de forma segura...", () => {
+      if (tabActivoNomenclador === "conductores") {
+        setCatConductores(prev => [...prev, nuevoItem]);
+      } else if (tabActivoNomenclador === "clientes") {
+        setCatClientes(prev => [...prev, nuevoItem]);
+      } else if (tabActivoNomenclador === "regiones") {
+        setCatRegiones(prev => [...prev, nuevoItem]);
+      } else if (tabActivoNomenclador === "servicios") {
+        setCatServicios(prev => [...prev, nuevoItem]);
+      }
+      setNuevoNomencladorNombre("");
+      triggerNotificacion("Elemento agregado correctamente.");
+    });
+  };
+
+  const handleIniciarEditarNomenclador = (item: { id: string; nombre: string }) => {
+    if (!tienePermisoEscritura) {
+      triggerNotificacion("No tienes permisos para modificar catálogos.", "error");
+      return;
+    }
+    setEditandoNomencladorId(item.id);
+    setEditandoNomencladorNombre(item.nombre);
+  };
+
+  const handleGuardarEditarNomenclador = (e: FormEvent) => {
+    e.preventDefault();
+    if (!tienePermisoEscritura) {
+      triggerNotificacion("No tienes permisos para modificar catálogos.", "error");
+      return;
+    }
+    if (!editandoNomencladorNombre.trim()) {
+      triggerNotificacion("El nombre no puede estar vacío.", "error");
+      return;
+    }
+
+    ejecutarOperacionAsincrona("Actualizando catálogo de forma asíncrona...", () => {
+      const updateFn = (prev: { id: string; nombre: string }[]) =>
+        prev.map(i => i.id === editandoNomencladorId ? { ...i, nombre: editandoNomencladorNombre.trim() } : i);
+
+      if (tabActivoNomenclador === "conductores") {
+        setCatConductores(updateFn);
+      } else if (tabActivoNomenclador === "clientes") {
+        setCatClientes(updateFn);
+      } else if (tabActivoNomenclador === "regiones") {
+        setCatRegiones(updateFn);
+      } else if (tabActivoNomenclador === "servicios") {
+        setCatServicios(updateFn);
+      }
+      setEditandoNomencladorId(null);
+      setEditandoNomencladorNombre("");
+      triggerNotificacion("Catálogo actualizado.");
+    });
+  };
+
+  const handleEliminarElementoNomenclador = (id: string, nombre: string) => {
+    if (!tienePermisoEscritura) {
+      triggerNotificacion("No tienes permisos para modificar catálogos.", "error");
+      return;
+    }
+    if (window.confirm(`¿Está seguro de que desea eliminar permanentemente "${nombre}" de este catálogo?`)) {
+      ejecutarOperacionAsincrona("Eliminando elemento de forma segura...", () => {
+        const deleteFn = (prev: { id: string; nombre: string }[]) => prev.filter(i => i.id !== id);
+
+        if (tabActivoNomenclador === "conductores") {
+          setCatConductores(deleteFn);
+        } else if (tabActivoNomenclador === "clientes") {
+          setCatClientes(deleteFn);
+        } else if (tabActivoNomenclador === "regiones") {
+          setCatRegiones(deleteFn);
+        } else if (tabActivoNomenclador === "servicios") {
+          setCatServicios(deleteFn);
+        }
+        triggerNotificacion("Elemento eliminado con éxito.");
+      });
+    }
+  };
+
   const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({
@@ -459,7 +678,7 @@ export default function App() {
   // Add new service
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    if (!formData.fecha || !formData.numServicio || !formData.razonSocial || !formData.servicioRealizado || !formData.conductor) {
+    if (!formData.fecha || !formData.numServicio || !formData.razonSocial || !formData.regionComuna || !formData.servicioRealizado || !formData.conductor) {
       triggerNotificacion("Por favor completa todos los campos obligatorios (*).", "error");
       return;
     }
@@ -481,6 +700,7 @@ export default function App() {
       fecha: prev.fecha,
       numServicio: "",
       razonSocial: "",
+      regionComuna: "",
       servicioRealizado: "",
       numSidrep: "",
       pesoEstimado: "",
@@ -532,6 +752,7 @@ export default function App() {
               // Convert "chofer" to "conductor" if any old record exists
               const migracion = parsed.map(item => ({
                 ...item,
+                regionComuna: item.regionComuna || "N/A",
                 conductor: item.conductor || item.chofer || "Sin Conductor"
               }));
               setServicios(migracion);
@@ -564,6 +785,7 @@ export default function App() {
       const cumpleBusqueda = 
         s.numServicio.toLowerCase().includes(q) ||
         s.razonSocial.toLowerCase().includes(q) ||
+        (s.regionComuna && s.regionComuna.toLowerCase().includes(q)) ||
         s.servicioRealizado.toLowerCase().includes(q) ||
         s.numSidrep.toLowerCase().includes(q) ||
         s.numGuia.toLowerCase().includes(q) ||
@@ -730,6 +952,7 @@ export default function App() {
       const filasDeTabla = listaDeEstaFecha.map(item => [
         item.numServicio,
         item.razonSocial,
+        item.regionComuna || "N/A",
         item.servicioRealizado,
         item.numSidrep,
         formatearPeso(item.pesoEstimado),
@@ -739,7 +962,7 @@ export default function App() {
 
       autoTable(doc, {
         startY: posicionY,
-        head: [["N° Serv.", "Razón Social / Cliente", "Servicio Realizado", "N° SIDREP", "Peso Est.", "N° Guía Despacho", "Conductor"]],
+        head: [["N° Serv.", "Razón Social / Cliente", "Región / Comuna", "Servicio Realizado", "N° SIDREP", "Peso Est.", "N° Guía Despacho", "Conductor"]],
         body: filasDeTabla,
         theme: "striped",
         headStyles: {
@@ -754,13 +977,14 @@ export default function App() {
           overflow: "linebreak"
         },
         columnStyles: {
-          0: { cellWidth: 18 }, // N° Serv
-          1: { cellWidth: 48 }, // Razón Social
-          2: { cellWidth: 78 }, // Servicio realizado
-          3: { cellWidth: 26 }, // SIDREP
-          4: { cellWidth: 22 }, // Peso
-          5: { cellWidth: 32 }, // Guía
-          6: { cellWidth: 31 }  // Conductor (renamed from chofer)
+          0: { cellWidth: 15 }, // N° Serv
+          1: { cellWidth: 38 }, // Razón Social
+          2: { cellWidth: 35 }, // Región / Comuna
+          3: { cellWidth: 60 }, // Servicio realizado
+          4: { cellWidth: 24 }, // SIDREP
+          5: { cellWidth: 22 }, // Peso
+          6: { cellWidth: 30 }, // Guía
+          7: { cellWidth: 30 }  // Conductor (renamed from chofer)
         },
         margin: { left: 12, right: 12 },
         didDrawPage: function() {
@@ -920,74 +1144,311 @@ export default function App() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#F8FAFC] font-sans text-slate-800 antialiased">
+    <div className="flex min-h-screen bg-[#F8FAFC] font-sans text-slate-800 antialiased w-full overflow-x-hidden">
       
-      {/* Sleek Design Top Header Bar */}
-      <header className="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-6 sm:px-8 shrink-0 sticky top-0 z-40 shadow-xs">
-        <div className="flex items-center gap-4">
-          <div className="bg-blue-600 p-2.5 rounded-xl shadow-xs shrink-0 flex items-center justify-center">
-            <Truck className="w-6 h-6 text-white" />
+      {/* 1. DESKTOP PERMANENT LEFT SIDEBAR */}
+      <aside className="hidden lg:flex flex-col w-72 bg-slate-900 text-slate-100 border-r border-slate-800 shrink-0 select-none z-30">
+        {/* Brand Header */}
+        <div className="h-20 border-b border-slate-800 flex items-center px-6 gap-3.5">
+          <div className="bg-blue-600 p-2 rounded-xl shadow-md shrink-0 flex items-center justify-center">
+            <Truck className="w-5.5 h-5.5 text-white animate-pulse" />
           </div>
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 uppercase font-display">
-              Via Limpia TFTB63
+            <h1 className="text-lg font-bold tracking-tight text-white uppercase font-display leading-tight">
+              Via Limpia
             </h1>
-            <p className="text-[10px] sm:text-xs text-slate-500 font-semibold tracking-widest uppercase">
-              Panel de Reporte Operativo de Camiones
+            <p className="text-[10px] text-slate-400 font-bold tracking-widest uppercase">
+              TFTB63 CONTROLES
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-4 sm:gap-6">
+        {/* User Identity Info in sidebar */}
+        <div className="p-4 mx-3 my-4 bg-slate-950/60 rounded-2xl border border-slate-800/80 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-blue-600 text-white font-bold text-sm flex items-center justify-center shrink-0 shadow-inner">
+            {usuarioActual?.nombre.charAt(0).toUpperCase()}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-bold text-slate-100 truncate capitalize">{usuarioActual?.nombre}</p>
+            <span className="inline-block text-[9px] bg-slate-800 text-blue-400 font-extrabold px-2 py-0.5 rounded-md uppercase tracking-wider mt-0.5 border border-blue-950">
+              {usuarioActual?.rol}
+            </span>
+          </div>
+        </div>
 
+        {/* Sidebar Nav links */}
+        <nav className="flex-1 px-4 space-y-1.5 overflow-y-auto">
+          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-3 mb-2">Módulos</p>
+          
+          <button
+            onClick={() => { setVistaActiva("servicios"); setMenuMovilAbierto(false); }}
+            className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+              vistaActiva === "servicios"
+                ? "bg-blue-600 text-white shadow-lg shadow-blue-950/50"
+                : "text-slate-400 hover:text-slate-100 hover:bg-slate-800/50"
+            }`}
+          >
+            <Truck className="w-4.5 h-4.5" />
+            <span>Servicios y Reportes</span>
+          </button>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setVistaActiva(prev => prev === "servicios" ? "usuarios" : "servicios")}
-              className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all shadow-xs active:scale-95 ${
-                vistaActiva === "usuarios" 
-                  ? "bg-blue-600 text-white border border-blue-600 hover:bg-blue-700" 
-                  : "bg-white hover:bg-slate-50 text-slate-700 border border-slate-200"
-              }`}
-              title="Gestionar usuarios y roles del sistema"
-            >
-              <Users className="w-3.5 h-3.5" />
-              <span>{vistaActiva === "usuarios" ? "Ver Servicios" : "Gestión Usuarios"}</span>
-            </button>
+          <button
+            onClick={() => { setVistaActiva("nomencladores"); setMenuMovilAbierto(false); }}
+            className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+              vistaActiva === "nomencladores"
+                ? "bg-blue-600 text-white shadow-lg shadow-blue-950/50"
+                : "text-slate-400 hover:text-slate-100 hover:bg-slate-800/50"
+            }`}
+          >
+            <SlidersHorizontal className="w-4.5 h-4.5" />
+            <span>Nomencladores (Catálogo)</span>
+          </button>
 
-            {/* Database backups styled elegantly as rounded outlines */}
-            <button
-              onClick={exportarBaseDatos}
-              className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all shadow-xs active:scale-95"
-              title="Exportar base de datos a un archivo JSON"
-            >
-              <Download className="w-3.5 h-3.5 text-blue-600" />
-              <span className="hidden sm:inline">Respaldar BD</span>
-            </button>
+          <button
+            onClick={() => { setVistaActiva("usuarios"); setMenuMovilAbierto(false); }}
+            className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+              vistaActiva === "usuarios"
+                ? "bg-blue-600 text-white shadow-lg shadow-blue-950/50"
+                : "text-slate-400 hover:text-slate-100 hover:bg-slate-800/50"
+            }`}
+          >
+            <Users className="w-4.5 h-4.5" />
+            <span>Usuarios y Roles</span>
+          </button>
+
+          <div className="pt-6 border-t border-slate-800 my-4 space-y-2">
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-3">Herramientas BD</p>
             
             <button
-              onClick={() => fileInputRef.current?.click()}
-              className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all shadow-xs active:scale-95"
-              title="Importar un archivo JSON de respaldo"
+              onClick={exportarBaseDatos}
+              className="w-full flex items-center gap-3.5 px-4 py-2.5 rounded-xl text-xs font-bold text-slate-400 hover:text-slate-100 hover:bg-slate-800/50 transition-all cursor-pointer"
             >
-              <Upload className="w-3.5 h-3.5 text-slate-500" />
-              <span className="hidden sm:inline">Cargar BD</span>
+              <Download className="w-4 h-4 text-blue-400" />
+              <span>Respaldar Base Datos</span>
             </button>
 
-            {/* Interactive Profile Menu */}
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full flex items-center gap-3.5 px-4 py-2.5 rounded-xl text-xs font-bold text-slate-400 hover:text-slate-100 hover:bg-slate-800/50 transition-all cursor-pointer"
+            >
+              <Upload className="w-4 h-4 text-emerald-400" />
+              <span>Cargar Base Datos</span>
+            </button>
+          </div>
+        </nav>
+
+        {/* Bottom profile actions */}
+        <div className="p-4 border-t border-slate-800 space-y-2">
+          <button
+            onClick={iniciarEdicionPerfil}
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors cursor-pointer text-left"
+          >
+            <User className="w-4 h-4 text-slate-500" />
+            <span>Editar Mi Perfil</span>
+          </button>
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-semibold text-rose-400 hover:text-rose-300 hover:bg-rose-950/30 transition-colors cursor-pointer text-left"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>Cerrar Sesión</span>
+          </button>
+        </div>
+      </aside>
+
+      {/* 2. MOBILE RESPONSIVE NAV DRAWER / SIDEBAR (ANIMATED VIA ANIMPATE PRESENCE) */}
+      <AnimatePresence>
+        {menuMovilAbierto && (
+          <div className="fixed inset-0 z-50 lg:hidden flex">
+            {/* Overlay backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setMenuMovilAbierto(false)}
+              className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs"
+            />
+
+            {/* Sidebar content */}
+            <motion.div
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 200 }}
+              className="relative w-80 max-w-xs bg-slate-900 text-slate-100 flex flex-col z-10 shadow-2xl"
+            >
+              {/* Mobile Sidebar Close Button */}
+              <button
+                onClick={() => setMenuMovilAbierto(false)}
+                className="absolute top-4 right-4 text-slate-400 hover:text-white p-1 hover:bg-slate-800 rounded-lg transition-all cursor-pointer"
+              >
+                <X className="w-6 h-6" />
+              </button>
+
+              <div className="h-20 border-b border-slate-800 flex items-center px-6 gap-3.5">
+                <div className="bg-blue-600 p-2 rounded-xl shadow-md shrink-0 flex items-center justify-center">
+                  <Truck className="w-5.5 h-5.5 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-lg font-bold tracking-tight text-white uppercase font-display leading-tight">
+                    Via Limpia
+                  </h1>
+                  <p className="text-[10px] text-slate-400 font-bold tracking-widest uppercase">
+                    TFTB63 CONTROLES
+                  </p>
+                </div>
+              </div>
+
+              {/* User Identity Info in mobile sidebar */}
+              <div className="p-4 mx-3 my-4 bg-slate-950/60 rounded-2xl border border-slate-800/80 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-blue-600 text-white font-bold text-sm flex items-center justify-center shrink-0 shadow-inner">
+                  {usuarioActual?.nombre.charAt(0).toUpperCase()}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold text-slate-100 truncate capitalize">{usuarioActual?.nombre}</p>
+                  <span className="inline-block text-[9px] bg-slate-800 text-blue-400 font-extrabold px-2 py-0.5 rounded-md uppercase tracking-wider mt-0.5 border border-blue-950">
+                    {usuarioActual?.rol}
+                  </span>
+                </div>
+              </div>
+
+              {/* Mobile Sidebar nav links */}
+              <nav className="flex-1 px-4 space-y-1.5 overflow-y-auto">
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-3 mb-2">Módulos</p>
+                
+                <button
+                  onClick={() => { setVistaActiva("servicios"); setMenuMovilAbierto(false); }}
+                  className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                    vistaActiva === "servicios"
+                      ? "bg-blue-600 text-white shadow-lg shadow-blue-950/50"
+                      : "text-slate-400 hover:text-slate-100 hover:bg-slate-800/50"
+                  }`}
+                >
+                  <Truck className="w-4.5 h-4.5" />
+                  <span>Servicios y Reportes</span>
+                </button>
+
+                <button
+                  onClick={() => { setVistaActiva("nomencladores"); setMenuMovilAbierto(false); }}
+                  className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                    vistaActiva === "nomencladores"
+                      ? "bg-blue-600 text-white shadow-lg shadow-blue-950/50"
+                      : "text-slate-400 hover:text-slate-100 hover:bg-slate-800/50"
+                  }`}
+                >
+                  <SlidersHorizontal className="w-4.5 h-4.5" />
+                  <span>Nomencladores (Catálogo)</span>
+                </button>
+
+                <button
+                  onClick={() => { setVistaActiva("usuarios"); setMenuMovilAbierto(false); }}
+                  className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                    vistaActiva === "usuarios"
+                      ? "bg-blue-600 text-white shadow-lg shadow-blue-950/50"
+                      : "text-slate-400 hover:text-slate-100 hover:bg-slate-800/50"
+                  }`}
+                >
+                  <Users className="w-4.5 h-4.5" />
+                  <span>Usuarios y Roles</span>
+                </button>
+
+                <div className="pt-6 border-t border-slate-800 my-4 space-y-2">
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-3">Herramientas BD</p>
+                  
+                  <button
+                    onClick={() => { exportarBaseDatos(); setMenuMovilAbierto(false); }}
+                    className="w-full flex items-center gap-3.5 px-4 py-2.5 rounded-xl text-xs font-bold text-slate-400 hover:text-slate-100 hover:bg-slate-800/50 transition-all cursor-pointer text-left"
+                  >
+                    <Download className="w-4 h-4 text-blue-400" />
+                    <span>Respaldar Base Datos</span>
+                  </button>
+
+                  <button
+                    onClick={() => { fileInputRef.current?.click(); setMenuMovilAbierto(false); }}
+                    className="w-full flex items-center gap-3.5 px-4 py-2.5 rounded-xl text-xs font-bold text-slate-400 hover:text-slate-100 hover:bg-slate-800/50 transition-all cursor-pointer text-left"
+                  >
+                    <Upload className="w-4 h-4 text-emerald-400" />
+                    <span>Cargar Base Datos</span>
+                  </button>
+                </div>
+              </nav>
+
+              {/* Mobile Sidebar profile actions */}
+              <div className="p-4 border-t border-slate-800 space-y-2">
+                <button
+                  onClick={() => { iniciarEdicionPerfil(); setMenuMovilAbierto(false); }}
+                  className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors cursor-pointer text-left"
+                >
+                  <User className="w-4 h-4 text-slate-500" />
+                  <span>Editar Mi Perfil</span>
+                </button>
+                <button
+                  onClick={() => { handleLogout(); setMenuMovilAbierto(false); }}
+                  className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-semibold text-rose-400 hover:text-rose-300 hover:bg-rose-950/30 transition-colors cursor-pointer text-left"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Cerrar Sesión</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* 3. MAIN WORKSPACE CONTENT CONTAINER */}
+      <div className="flex-1 flex flex-col min-w-0 min-h-screen">
+        
+        {/* Responsive Header Bar */}
+        <header className="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-6 sm:px-8 shrink-0 sticky top-0 z-40 shadow-xs">
+          <div className="flex items-center gap-4">
+            {/* Mobile Hamburger toggle button */}
+            <button
+              onClick={() => setMenuMovilAbierto(true)}
+              className="lg:hidden p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-all cursor-pointer"
+              title="Abrir menú de navegación"
+            >
+              <Menu className="w-6 h-6" />
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="hidden lg:flex bg-blue-50 text-blue-600 p-2 rounded-lg shadow-xs">
+                {vistaActiva === "servicios" && <Truck className="w-5 h-5" />}
+                {vistaActiva === "nomencladores" && <SlidersHorizontal className="w-5 h-5" />}
+                {vistaActiva === "usuarios" && <Users className="w-5 h-5" />}
+              </div>
+              <div>
+                <h1 className="text-base sm:text-lg font-bold tracking-tight text-slate-900 uppercase font-display flex items-center gap-2">
+                  <span>Via Limpia TFTB63</span>
+                  <span className="text-[10px] bg-slate-100 text-slate-500 font-bold px-2 py-0.5 rounded-full lowercase tracking-normal hidden sm:inline">v2.5</span>
+                </h1>
+                <p className="text-[10px] text-slate-500 font-semibold tracking-wider uppercase">
+                  {vistaActiva === "servicios" && "Servicios de camiones y reportes pdf"}
+                  {vistaActiva === "nomencladores" && "Administración de catálogos y maestros"}
+                  {vistaActiva === "usuarios" && "Gestión de cuentas de usuarios y roles"}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Profile Menu Header Widget for desktop */}
+          <div className="flex items-center gap-4">
+            <div className="hidden sm:flex flex-col items-end text-right">
+              <span className="text-xs font-bold text-slate-800 truncate capitalize">{usuarioActual?.nombre}</span>
+              <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider">{usuarioActual?.rol}</span>
+            </div>
+
             <div className="relative">
               <button
                 onClick={() => setMostrarMenuPerfil(prev => !prev)}
-                className="bg-slate-900 hover:bg-slate-800 text-white px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2.5 transition-all shadow-md active:scale-95 cursor-pointer text-left"
+                className="bg-slate-900 hover:bg-slate-800 text-white p-1 rounded-full sm:px-3.5 sm:py-2 sm:rounded-xl text-xs font-semibold flex items-center gap-2 transition-all shadow-md active:scale-95 cursor-pointer text-left"
                 title="Menú de Perfil"
               >
-                <div className="w-5 h-5 rounded-full bg-blue-500 text-white font-bold text-[10px] flex items-center justify-center shadow-xs">
+                <div className="w-7 h-7 rounded-full bg-blue-500 text-white font-bold text-xs flex items-center justify-center shadow-inner">
                   {usuarioActual?.nombre.charAt(0).toUpperCase()}
                 </div>
-                <span className="max-w-[120px] truncate capitalize">{usuarioActual?.nombre.split(" ")[0]}</span>
-                <span className="text-[8px] opacity-75">▼</span>
+                <span className="hidden sm:inline max-w-[120px] truncate capitalize">{usuarioActual?.nombre.split(" ")[0]}</span>
               </button>
-
+              
               <AnimatePresence>
                 {mostrarMenuPerfil && (
                   <>
@@ -995,49 +1456,29 @@ export default function App() {
                       className="fixed inset-0 z-40" 
                       onClick={() => setMostrarMenuPerfil(false)} 
                     />
-                    
-                    <motion.div
-                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                      className="absolute right-0 mt-2 w-72 bg-white rounded-2xl shadow-xl border border-slate-200 p-4 z-50 space-y-3 text-left"
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 10 }}
+                      className="absolute right-0 mt-2.5 w-60 bg-white border border-slate-100 rounded-2xl shadow-xl p-3 z-50 text-slate-800"
                     >
-                      <div className="border-b border-slate-100 pb-3">
-                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Usuario Conectado</p>
-                        <div className="flex items-center gap-2.5 mt-2">
-                          <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 font-bold text-sm flex items-center justify-center">
-                            {usuarioActual?.nombre.charAt(0).toUpperCase()}
-                          </div>
-                          <div className="overflow-hidden">
-                            <h4 className="font-bold text-slate-800 text-sm leading-tight capitalize truncate">{usuarioActual?.nombre}</h4>
-                            <span className="text-[10px] bg-slate-100 text-slate-600 border border-slate-200 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider inline-block mt-1">
-                              {usuarioActual?.rol}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="text-[11px] text-slate-400 font-medium mt-3 bg-slate-50 p-2 rounded-xl border border-slate-100 flex items-center gap-1.5">
-                          <Calendar className="w-3.5 h-3.5 text-blue-500" />
-                          <span>Hoy: {new Date().toLocaleDateString("es-CL", { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-                        </div>
+                      <div className="p-2 border-b border-slate-50 text-xs">
+                        <p className="font-extrabold text-slate-900 truncate capitalize">{usuarioActual?.nombre}</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5 font-semibold">Usuario: <span className="font-bold">{usuarioActual?.usuario}</span></p>
                       </div>
-
-                      <div className="space-y-1">
-                        <button
-                          onClick={iniciarEdicionPerfil}
-                          className="w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors cursor-pointer"
+                      <div className="py-1.5 space-y-0.5">
+                        <button 
+                          onClick={() => { setEditandoPerfil(true); setMostrarMenuPerfil(false); }}
+                          className="w-full text-left px-3 py-2 text-xs font-semibold hover:bg-slate-50 rounded-xl transition-colors cursor-pointer flex items-center gap-2 text-slate-700"
                         >
-                          <Pencil className="w-3.5 h-3.5 text-blue-600" />
+                          <User className="w-4 h-4 text-slate-400" />
                           <span>Editar Mi Perfil</span>
                         </button>
-                        
-                        <button
-                          onClick={() => {
-                            setMostrarMenuPerfil(false);
-                            handleLogout();
-                          }}
-                          className="w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold text-rose-700 hover:bg-rose-50 flex items-center gap-2 transition-colors cursor-pointer"
+                        <button 
+                          onClick={handleLogout}
+                          className="w-full text-left px-3 py-2 text-xs font-semibold hover:bg-rose-50 text-rose-600 rounded-xl transition-colors cursor-pointer flex items-center gap-2"
                         >
-                          <LogOut className="w-3.5 h-3.5 text-rose-600" />
+                          <LogOut className="w-4 h-4 text-rose-400" />
                           <span>Cerrar Sesión</span>
                         </button>
                       </div>
@@ -1046,47 +1487,72 @@ export default function App() {
                 )}
               </AnimatePresence>
             </div>
-
-            <input 
-              type="file"
-              ref={fileInputRef}
-              onChange={importarBaseDatos}
-              accept=".json"
-              className="hidden"
-            />
           </div>
-        </div>
-      </header>
+        </header>
 
-      {/* Floating Notifications System */}
-      <AnimatePresence>
-        {notificacion && (
-          <motion.div 
-            initial={{ opacity: 0, y: 30, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 15, scale: 0.95 }}
-            className={`fixed bottom-6 right-6 z-50 flex items-center p-4 rounded-xl shadow-xl border ${
-              notificacion.tipo === "success" ? "bg-emerald-50 border-emerald-200 text-emerald-900" :
-              notificacion.tipo === "error" ? "bg-rose-50 border-rose-200 text-rose-900" :
-              "bg-blue-50 border-blue-200 text-blue-900"
-            }`}
-          >
-            <div className="mr-3">
-              {notificacion.tipo === "success" && <CheckCircle className="w-5 h-5 text-emerald-600" />}
-              {notificacion.tipo === "error" && <AlertCircle className="w-5 h-5 text-rose-600" />}
-              {notificacion.tipo === "info" && <Info className="w-5 h-5 text-blue-600" />}
-            </div>
-            <div>
-              <p className="font-semibold text-xs tracking-wide">{notificacion.mensaje}</p>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+        {/* Hidden inputs / references */}
+        <input 
+          type="file"
+          ref={fileInputRef}
+          onChange={importarBaseDatos}
+          accept=".json"
+          className="hidden"
+        />
 
-      {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-6 sm:p-8 space-y-8">
+        {/* Floating Notifications System */}
+        <AnimatePresence>
+          {notificacion && (
+            <motion.div 
+              initial={{ opacity: 0, y: 30, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 15, scale: 0.95 }}
+              className={`fixed bottom-6 right-6 z-50 flex items-center p-4 rounded-xl shadow-xl border ${
+                notificacion.tipo === "success" ? "bg-emerald-50 border-emerald-200 text-emerald-900" :
+                notificacion.tipo === "error" ? "bg-rose-50 border-rose-200 text-rose-900" :
+                "bg-blue-50 border-blue-200 text-blue-900"
+              }`}
+            >
+              <div className="mr-3">
+                {notificacion.tipo === "success" && <CheckCircle className="w-5 h-5 text-emerald-600" />}
+                {notificacion.tipo === "error" && <AlertCircle className="w-5 h-5 text-rose-600" />}
+                {notificacion.tipo === "info" && <Info className="w-5 h-5 text-blue-600" />}
+              </div>
+              <div>
+                <p className="font-semibold text-xs tracking-wide">{notificacion.mensaje}</p>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        {vistaActiva === "usuarios" ? (
+        {/* 4. MAIN WORKSPACE PANELS */}
+        <main className="flex-1 p-6 sm:p-8 space-y-8 overflow-y-auto">
+
+          {/* ASYNCHRONOUS SECURE OVERLAY INTERFACE */}
+          <AnimatePresence>
+            {asyncOperando && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-slate-950/70 z-50 flex flex-col items-center justify-center p-4 backdrop-blur-xs text-white"
+              >
+                <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 max-w-sm w-full text-center space-y-4 shadow-2xl flex flex-col items-center">
+                  <div className="relative flex items-center justify-center">
+                    <div className="w-12 h-12 rounded-full border-4 border-slate-700 border-t-blue-500 animate-spin" />
+                    <Lock className="w-4 h-4 text-blue-500 absolute animate-pulse" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <p className="text-xs text-blue-400 font-bold uppercase tracking-wider">Transacción Asíncrona Segura</p>
+                    <p className="text-sm font-semibold text-slate-100">{asyncMensaje}</p>
+                    <p className="text-[10px] text-slate-500 font-medium">Sincronizando almacenamiento local...</p>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Conditional Multi-View Routing */}
+          {vistaActiva === "usuarios" ? (
           /* ==================== GESTIÓN DE USUARIOS ==================== */
           <div className="space-y-8">
             {/* Header / Intro section */}
@@ -1337,6 +1803,272 @@ export default function App() {
               </div>
             </div>
           </div>
+        ) : vistaActiva === "nomencladores" ? (
+          /* ==================== MÓDULO NOMENCLADORES ==================== */
+          <div className="space-y-8">
+            {/* Header / Intro section */}
+            <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div>
+                <div className="flex items-center gap-2 text-blue-600 font-bold text-xs uppercase tracking-wider mb-2">
+                  <SlidersHorizontal className="w-4 h-4" />
+                  <span>Maestros y Nomencladores</span>
+                </div>
+                <h2 className="text-xl sm:text-2xl font-bold text-slate-900 uppercase font-display">
+                  Administración de Catálogos Reutilizables
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1">
+                  Crea, edita y remueve los datos reutilizables del sistema para evitar errores de escritura manual en los formularios.
+                </p>
+              </div>
+              
+              {/* Database Quick Info / Status */}
+              <div className="flex flex-wrap gap-2 text-xs">
+                <span className="px-3 py-1.5 bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-bold flex items-center gap-1.5">
+                  📁 Conductores ({catConductores.length})
+                </span>
+                <span className="px-3 py-1.5 bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-bold flex items-center gap-1.5">
+                  🏢 Clientes ({catClientes.length})
+                </span>
+                <span className="px-3 py-1.5 bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-bold flex items-center gap-1.5">
+                  📍 Regiones ({catRegiones.length})
+                </span>
+              </div>
+            </div>
+
+            {/* Layout with selector tab bar and side form / table */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+              
+              {/* Left Column: List/Table of active catalog */}
+              <div className="lg:col-span-8 space-y-6">
+                
+                {/* Entity selection tabs */}
+                <div className="bg-white p-2.5 rounded-2xl border border-slate-200 flex flex-wrap gap-1.5">
+                  <button
+                    onClick={() => { setTabActivoNomenclador("conductores"); setEditandoNomencladorId(null); setNuevoNomencladorNombre(""); }}
+                    className={`flex-1 min-w-[120px] px-4 py-3 rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                      tabActivoNomenclador === "conductores"
+                        ? "bg-blue-600 text-white shadow-md shadow-blue-100"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                    }`}
+                  >
+                    <User className="w-4 h-4" />
+                    <span>Conductores ({catConductores.length})</span>
+                  </button>
+
+                  <button
+                    onClick={() => { setTabActivoNomenclador("clientes"); setEditandoNomencladorId(null); setNuevoNomencladorNombre(""); }}
+                    className={`flex-1 min-w-[120px] px-4 py-3 rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                      tabActivoNomenclador === "clientes"
+                        ? "bg-blue-600 text-white shadow-md shadow-blue-100"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                    }`}
+                  >
+                    <Building2 className="w-4 h-4" />
+                    <span>Clientes ({catClientes.length})</span>
+                  </button>
+
+                  <button
+                    onClick={() => { setTabActivoNomenclador("regiones"); setEditandoNomencladorId(null); setNuevoNomencladorNombre(""); }}
+                    className={`flex-1 min-w-[120px] px-4 py-3 rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                      tabActivoNomenclador === "regiones"
+                        ? "bg-blue-600 text-white shadow-md shadow-blue-100"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                    }`}
+                  >
+                    <MapPin className="w-4 h-4" />
+                    <span>Regiones/Comunas ({catRegiones.length})</span>
+                  </button>
+
+                  <button
+                    onClick={() => { setTabActivoNomenclador("servicios"); setEditandoNomencladorId(null); setNuevoNomencladorNombre(""); }}
+                    className={`flex-1 min-w-[120px] px-4 py-3 rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                      tabActivoNomenclador === "servicios"
+                        ? "bg-blue-600 text-white shadow-md shadow-blue-100"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                    }`}
+                  >
+                    <SlidersHorizontal className="w-4 h-4" />
+                    <span>Servicios ({catServicios.length})</span>
+                  </button>
+                </div>
+
+                {/* Table card */}
+                <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xs">
+                  <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center flex-wrap gap-4">
+                    <div>
+                      <h3 className="font-extrabold text-sm text-slate-900 uppercase tracking-wide flex items-center gap-2">
+                        <span>Elementos en Catálogo:</span>
+                        <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full capitalize">{tabActivoNomenclador}</span>
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-1">Lista actual de datos cargados en la base de datos de persistencia local.</p>
+                    </div>
+                  </div>
+
+                  <div className="divide-y divide-slate-100">
+                    {/* Render corresponding items based on active tab */}
+                    {((tabActivoNomenclador === "conductores" ? catConductores :
+                       tabActivoNomenclador === "clientes" ? catClientes :
+                       tabActivoNomenclador === "regiones" ? catRegiones :
+                       catServicios) || []).length === 0 ? (
+                      <div className="p-12 text-center text-slate-400">
+                        <p className="text-xs font-bold uppercase tracking-wider">No hay elementos registrados en este catálogo</p>
+                        <p className="text-xs text-slate-400 mt-1">Usa el formulario de la derecha para dar de alta el primer elemento.</p>
+                      </div>
+                    ) : (
+                      ((tabActivoNomenclador === "conductores" ? catConductores :
+                        tabActivoNomenclador === "clientes" ? catClientes :
+                        tabActivoNomenclador === "regiones" ? catRegiones :
+                        catServicios) || []).map((item, idx) => (
+                        <div key={item.id} className="p-4 sm:p-5 flex items-center justify-between hover:bg-slate-50/80 transition-colors">
+                          <div className="flex items-center gap-3.5 min-w-0">
+                            <span className="text-[10px] text-slate-400 font-mono font-bold w-6">{idx + 1}.</span>
+                            <div className="bg-slate-100 text-slate-700 p-2 rounded-xl">
+                              {tabActivoNomenclador === "conductores" && <User className="w-4 h-4 text-blue-600" />}
+                              {tabActivoNomenclador === "clientes" && <Building2 className="w-4 h-4 text-indigo-600" />}
+                              {tabActivoNomenclador === "regiones" && <MapPin className="w-4 h-4 text-emerald-600" />}
+                              {tabActivoNomenclador === "servicios" && <SlidersHorizontal className="w-4 h-4 text-amber-600" />}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="font-bold text-slate-800 text-sm truncate">{item.nombre}</p>
+                              <p className="text-[9px] text-slate-400 font-mono tracking-wider uppercase mt-0.5">ID: {item.id}</p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              onClick={() => handleIniciarEditarNomenclador(item)}
+                              className="p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all cursor-pointer"
+                              title="Editar nombre del elemento"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleEliminarElementoNomenclador(item.id, item.nombre)}
+                              className="p-2 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all cursor-pointer"
+                              title="Eliminar elemento del catálogo"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column: Add / Edit Form */}
+              <div className="lg:col-span-4 space-y-6">
+                
+                <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 space-y-6 shadow-xs">
+                  <div>
+                    <h3 className="font-extrabold text-sm text-slate-900 uppercase tracking-wide flex items-center gap-2">
+                      {editandoNomencladorId ? (
+                        <>
+                          <Pencil className="w-4 h-4 text-blue-600" />
+                          <span>Modificar Elemento</span>
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="w-4 h-4 text-blue-600" />
+                          <span>Agregar al Catálogo</span>
+                        </>
+                      )}
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-1">
+                      {editandoNomencladorId
+                        ? "Actualiza el valor en todos los menús desplegables del sistema."
+                        : "Da de alta un nuevo elemento disponible para autocompletado rápido."}
+                    </p>
+                  </div>
+
+                  <form 
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (editandoNomencladorId) {
+                        handleGuardarEditarNomenclador(e);
+                      } else {
+                        handleCrearElementoNomenclador(e);
+                      }
+                    }}
+                    className="space-y-4"
+                  >
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                        Categoría Seleccionada
+                      </label>
+                      <input
+                        type="text"
+                        value={tabActivoNomenclador === "conductores" ? "Conductor Asignado" :
+                               tabActivoNomenclador === "clientes" ? "Razón Social / Cliente" :
+                               tabActivoNomenclador === "regiones" ? "Región / Comuna" : "Servicio Realizado"}
+                        disabled
+                        className="w-full px-4 py-2.5 border border-slate-100 bg-slate-50/80 rounded-xl text-xs font-extrabold text-slate-500 uppercase tracking-wider select-none cursor-not-allowed"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                        Nombre del Elemento *
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={editandoNomencladorId ? editandoNomencladorNombre : nuevoNomencladorNombre}
+                          onChange={(e) => {
+                            if (editandoNomencladorId) {
+                              setEditandoNomencladorNombre(e.target.value);
+                            } else {
+                              setNuevoNomencladorNombre(e.target.value);
+                            }
+                          }}
+                          placeholder={
+                            tabActivoNomenclador === "conductores" ? "Nombre del conductor asignado" :
+                            tabActivoNomenclador === "clientes" ? "Razón social del cliente" :
+                            tabActivoNomenclador === "regiones" ? "Ej: Región de Antofagasta / Sierra Gorda" :
+                            "Detalle del servicio prestado"
+                          }
+                          className="w-full px-4 py-2.5 border border-slate-200 bg-slate-50 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm font-semibold transition-all"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="pt-2 flex gap-2">
+                      {editandoNomencladorId && (
+                        <button
+                          type="button"
+                          onClick={() => { setEditandoNomencladorId(null); setEditandoNomencladorNombre(""); }}
+                          className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl text-xs transition-all cursor-pointer"
+                        >
+                          Cancelar
+                        </button>
+                      )}
+                      <button
+                        type="submit"
+                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl text-xs shadow-xs hover:shadow-md transition-all active:scale-95 cursor-pointer"
+                      >
+                        {editandoNomencladorId ? "Guardar Cambios" : "Agregar Elemento"}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+                {/* Secure Catalog Tip Card */}
+                <div className="bg-blue-950 text-blue-100 p-5 rounded-3xl space-y-2 border border-blue-900/40">
+                  <h4 className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 text-blue-300">
+                    <Shield className="w-4 h-4" />
+                    <span>Control de Acceso</span>
+                  </h4>
+                  <p className="text-[11px] leading-relaxed opacity-90">
+                    Las modificaciones del catálogo de nomencladores son asincrónicas y seguras. Requieren que tu cuenta posea permisos de nivel <strong>Administrador</strong> u <strong>Operador</strong>.
+                  </p>
+                </div>
+
+              </div>
+
+            </div>
+          </div>
         ) : (
           <>
             {/* Sleek Summary bento grid row */}
@@ -1426,54 +2158,193 @@ export default function App() {
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                    Conductor Asignado *
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                    <span>Conductor Asignado *</span>
+                    <button
+                      type="button"
+                      onClick={() => setInputModeConductor(prev => prev === "select" ? "custom" : "select")}
+                      className="text-[10px] text-blue-600 hover:underline font-bold"
+                    >
+                      {inputModeConductor === "select" ? "✏️ Escribir manual" : "📋 Elegir del catálogo"}
+                    </button>
                   </label>
                   <div className="relative">
                     <User className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
-                    <input 
-                      type="text"
-                      name="conductor"
-                      value={formData.conductor}
-                      onChange={handleInputChange}
-                      placeholder="Nombre del conductor"
-                      className="w-full pl-10 pr-3 py-2.5 border border-slate-200 bg-slate-50 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-sm font-semibold transition-all"
-                      required
-                    />
+                    {inputModeConductor === "select" ? (
+                      <select
+                        name="conductor"
+                        value={formData.conductor}
+                        onChange={(e) => {
+                          if (e.target.value === "__MANAGE__") {
+                            setVistaActiva("nomencladores");
+                            setTabActivoNomenclador("conductores");
+                            triggerNotificacion("Abriendo administración de conductores...", "info");
+                          } else {
+                            setFormData(prev => ({ ...prev, conductor: e.target.value }));
+                          }
+                        }}
+                        className="w-full pl-10 pr-3 py-2.5 border border-slate-200 bg-slate-50 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-sm font-semibold transition-all appearance-none cursor-pointer"
+                        required
+                      >
+                        <option value="">-- Seleccione Conductor --</option>
+                        {catConductores.map(c => (
+                          <option key={c.id} value={c.nombre}>{c.nombre}</option>
+                        ))}
+                        <option value="__MANAGE__" className="text-blue-600 font-bold">⚙️ Administrar Catálogo...</option>
+                      </select>
+                    ) : (
+                      <input 
+                        type="text"
+                        name="conductor"
+                        value={formData.conductor}
+                        onChange={handleInputChange}
+                        placeholder="Escriba nombre del conductor"
+                        className="w-full pl-10 pr-3 py-2.5 border border-slate-200 bg-slate-50 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-sm font-semibold transition-all"
+                        required
+                      />
+                    )}
                   </div>
                 </div>
               </div>
 
-              {/* Row 2: Client and Description */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Row 2: Client, Region/Commune and Description */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                    Razón Social / Cliente *
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                    <span>Razón Social / Cliente *</span>
+                    <button
+                      type="button"
+                      onClick={() => setInputModeCliente(prev => prev === "select" ? "custom" : "select")}
+                      className="text-[10px] text-blue-600 hover:underline font-bold"
+                    >
+                      {inputModeCliente === "select" ? "✏️ Escribir manual" : "📋 Elegir del catálogo"}
+                    </button>
                   </label>
-                  <input 
-                    type="text"
-                    name="razonSocial"
-                    value={formData.razonSocial}
-                    onChange={handleInputChange}
-                    placeholder="Ej: Minera del Norte S.A."
-                    className="w-full px-4 py-2.5 border border-slate-200 bg-slate-50 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-sm font-semibold transition-all"
-                    required
-                  />
+                  {inputModeCliente === "select" ? (
+                    <select
+                      name="razonSocial"
+                      value={formData.razonSocial}
+                      onChange={(e) => {
+                        if (e.target.value === "__MANAGE__") {
+                          setVistaActiva("nomencladores");
+                          setTabActivoNomenclador("clientes");
+                          triggerNotificacion("Abriendo administración de clientes...", "info");
+                        } else {
+                          setFormData(prev => ({ ...prev, razonSocial: e.target.value }));
+                        }
+                      }}
+                      className="w-full px-4 py-2.5 border border-slate-200 bg-slate-50 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-sm font-semibold transition-all appearance-none cursor-pointer"
+                      required
+                    >
+                      <option value="">-- Seleccione Cliente --</option>
+                      {catClientes.map(c => (
+                        <option key={c.id} value={c.nombre}>{c.nombre}</option>
+                      ))}
+                      <option value="__MANAGE__" className="text-blue-600 font-bold">⚙️ Administrar Catálogo...</option>
+                    </select>
+                  ) : (
+                    <input 
+                      type="text"
+                      name="razonSocial"
+                      value={formData.razonSocial}
+                      onChange={handleInputChange}
+                      placeholder="Ej: Minera del Norte S.A."
+                      className="w-full px-4 py-2.5 border border-slate-200 bg-slate-50 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-sm font-semibold transition-all"
+                      required
+                    />
+                  )}
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                    Servicio Realizado *
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                    <span>Región / Comuna *</span>
+                    <button
+                      type="button"
+                      onClick={() => setInputModeRegion(prev => prev === "select" ? "custom" : "select")}
+                      className="text-[10px] text-blue-600 hover:underline font-bold"
+                    >
+                      {inputModeRegion === "select" ? "✏️ Escribir manual" : "📋 Elegir del catálogo"}
+                    </button>
                   </label>
-                  <input 
-                    type="text"
-                    name="servicioRealizado"
-                    value={formData.servicioRealizado}
-                    onChange={handleInputChange}
-                    placeholder="Ej: Retiro de residuos metalúrgicos"
-                    className="w-full px-4 py-2.5 border border-slate-200 bg-slate-50 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-sm transition-all"
-                    required
-                  />
+                  {inputModeRegion === "select" ? (
+                    <select
+                      name="regionComuna"
+                      value={formData.regionComuna}
+                      onChange={(e) => {
+                        if (e.target.value === "__MANAGE__") {
+                          setVistaActiva("nomencladores");
+                          setTabActivoNomenclador("regiones");
+                          triggerNotificacion("Abriendo administración de regiones...", "info");
+                        } else {
+                          setFormData(prev => ({ ...prev, regionComuna: e.target.value }));
+                        }
+                      }}
+                      className="w-full px-4 py-2.5 border border-slate-200 bg-slate-50 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-sm font-semibold transition-all appearance-none cursor-pointer"
+                      required
+                    >
+                      <option value="">-- Seleccione Región / Comuna --</option>
+                      {catRegiones.map(r => (
+                        <option key={r.id} value={r.nombre}>{r.nombre}</option>
+                      ))}
+                      <option value="__MANAGE__" className="text-blue-600 font-bold">⚙️ Administrar Catálogo...</option>
+                    </select>
+                  ) : (
+                    <input 
+                      type="text"
+                      name="regionComuna"
+                      value={formData.regionComuna}
+                      onChange={handleInputChange}
+                      placeholder="Ej: Antofagasta / Sierra Gorda"
+                      className="w-full px-4 py-2.5 border border-slate-200 bg-slate-50 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-sm font-semibold transition-all"
+                      required
+                    />
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                    <span>Servicio Realizado *</span>
+                    <button
+                      type="button"
+                      onClick={() => setInputModeServicio(prev => prev === "select" ? "custom" : "select")}
+                      className="text-[10px] text-blue-600 hover:underline font-bold"
+                    >
+                      {inputModeServicio === "select" ? "✏️ Escribir manual" : "📋 Elegir del catálogo"}
+                    </button>
+                  </label>
+                  {inputModeServicio === "select" ? (
+                    <select
+                      name="servicioRealizado"
+                      value={formData.servicioRealizado}
+                      onChange={(e) => {
+                        if (e.target.value === "__MANAGE__") {
+                          setVistaActiva("nomencladores");
+                          setTabActivoNomenclador("servicios");
+                          triggerNotificacion("Abriendo administración de servicios...", "info");
+                        } else {
+                          setFormData(prev => ({ ...prev, servicioRealizado: e.target.value }));
+                        }
+                      }}
+                      className="w-full px-4 py-2.5 border border-slate-200 bg-slate-50 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-sm font-semibold transition-all appearance-none cursor-pointer"
+                      required
+                    >
+                      <option value="">-- Seleccione Servicio Realizado --</option>
+                      {catServicios.map(s => (
+                        <option key={s.id} value={s.nombre}>{s.nombre}</option>
+                      ))}
+                      <option value="__MANAGE__" className="text-blue-600 font-bold">⚙️ Administrar Catálogo...</option>
+                    </select>
+                  ) : (
+                    <input 
+                      type="text"
+                      name="servicioRealizado"
+                      value={formData.servicioRealizado}
+                      onChange={handleInputChange}
+                      placeholder="Ej: Retiro de residuos metalúrgicos"
+                      className="w-full px-4 py-2.5 border border-slate-200 bg-slate-50 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-sm transition-all"
+                      required
+                    />
+                  )}
                 </div>
               </div>
 
@@ -1722,6 +2593,7 @@ export default function App() {
                     <th className="px-8 py-4">Fecha</th>
                     <th className="px-8 py-4">N° Serv</th>
                     <th className="px-8 py-4">Cliente / Razón Social</th>
+                    <th className="px-8 py-4">Región / Comuna</th>
                     <th className="px-8 py-4">Servicio Realizado</th>
                     <th className="px-8 py-4">N° SIDREP</th>
                     <th className="px-8 py-4">Carga (Est)</th>
@@ -1741,6 +2613,9 @@ export default function App() {
                       </td>
                       <td className="px-8 py-4 font-bold text-slate-800">
                         {item.razonSocial}
+                      </td>
+                      <td className="px-8 py-4 font-bold text-slate-700 bg-slate-50/10">
+                        {item.regionComuna || "N/A"}
                       </td>
                       <td className="px-8 py-4 text-slate-500 max-w-[220px] truncate font-medium" title={item.servicioRealizado}>
                         {item.servicioRealizado}
@@ -2107,54 +2982,201 @@ export default function App() {
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                      Conductor Asignado *
+                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                      <span>Conductor Asignado *</span>
+                      <button
+                        type="button"
+                        onClick={() => setEditInputModeConductor(prev => prev === "select" ? "custom" : "select")}
+                        className="text-[10px] text-blue-600 hover:underline font-bold"
+                      >
+                        {editInputModeConductor === "select" ? "✏️ Escribir manual" : "📋 Elegir del catálogo"}
+                      </button>
                     </label>
                     <div className="relative">
                       <User className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
-                      <input 
-                        type="text"
-                        name="conductor"
-                        value={editFormData.conductor}
-                        onChange={handleEditInputChange}
-                        placeholder="Nombre del conductor"
-                        className="w-full pl-10 pr-3 py-2.5 border border-slate-200 bg-slate-50 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-sm font-semibold transition-all"
-                        required
-                      />
+                      {editInputModeConductor === "select" ? (
+                        <select
+                          name="conductor"
+                          value={editFormData.conductor}
+                          onChange={(e) => {
+                            if (e.target.value === "__MANAGE__") {
+                              setVistaActiva("nomencladores");
+                              setTabActivoNomenclador("conductores");
+                              setEditandoServicio(null);
+                              setEditFormData(null);
+                              triggerNotificacion("Abriendo administración de conductores...", "info");
+                            } else {
+                              setEditFormData(prev => prev ? ({ ...prev, conductor: e.target.value }) : null);
+                            }
+                          }}
+                          className="w-full pl-10 pr-3 py-2.5 border border-slate-200 bg-slate-50 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-sm font-semibold transition-all appearance-none cursor-pointer"
+                          required
+                        >
+                          <option value="">-- Seleccione Conductor --</option>
+                          {catConductores.map(c => (
+                            <option key={c.id} value={c.nombre}>{c.nombre}</option>
+                          ))}
+                          <option value="__MANAGE__" className="text-blue-600 font-bold">⚙️ Administrar Catálogo...</option>
+                        </select>
+                      ) : (
+                        <input 
+                          type="text"
+                          name="conductor"
+                          value={editFormData.conductor}
+                          onChange={handleEditInputChange}
+                          placeholder="Nombre del conductor"
+                          className="w-full pl-10 pr-3 py-2.5 border border-slate-200 bg-slate-50 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-sm font-semibold transition-all"
+                          required
+                        />
+                      )}
                     </div>
                   </div>
                 </div>
 
-                {/* Row 2: Client and Description */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Row 2: Client, Region/Commune and Description */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                      Razón Social / Cliente *
+                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                      <span>Razón Social / Cliente *</span>
+                      <button
+                        type="button"
+                        onClick={() => setEditInputModeCliente(prev => prev === "select" ? "custom" : "select")}
+                        className="text-[10px] text-blue-600 hover:underline font-bold"
+                      >
+                        {editInputModeCliente === "select" ? "✏️ Escribir manual" : "📋 Elegir del catálogo"}
+                      </button>
                     </label>
-                    <input 
-                      type="text"
-                      name="razonSocial"
-                      value={editFormData.razonSocial}
-                      onChange={handleEditInputChange}
-                      placeholder="Ej: Minera del Norte S.A."
-                      className="w-full px-4 py-2.5 border border-slate-200 bg-slate-50 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-sm font-semibold transition-all"
-                      required
-                    />
+                    {editInputModeCliente === "select" ? (
+                      <select
+                        name="razonSocial"
+                        value={editFormData.razonSocial}
+                        onChange={(e) => {
+                          if (e.target.value === "__MANAGE__") {
+                            setVistaActiva("nomencladores");
+                            setTabActivoNomenclador("clientes");
+                            setEditandoServicio(null);
+                            setEditFormData(null);
+                            triggerNotificacion("Abriendo administración de clientes...", "info");
+                          } else {
+                            setEditFormData(prev => prev ? ({ ...prev, razonSocial: e.target.value }) : null);
+                          }
+                        }}
+                        className="w-full px-4 py-2.5 border border-slate-200 bg-slate-50 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-sm font-semibold transition-all appearance-none cursor-pointer"
+                        required
+                      >
+                        <option value="">-- Seleccione Cliente --</option>
+                        {catClientes.map(c => (
+                          <option key={c.id} value={c.nombre}>{c.nombre}</option>
+                        ))}
+                        <option value="__MANAGE__" className="text-blue-600 font-bold">⚙️ Administrar Catálogo...</option>
+                      </select>
+                    ) : (
+                      <input 
+                        type="text"
+                        name="razonSocial"
+                        value={editFormData.razonSocial}
+                        onChange={handleEditInputChange}
+                        placeholder="Ej: Minera del Norte S.A."
+                        className="w-full px-4 py-2.5 border border-slate-200 bg-slate-50 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-sm font-semibold transition-all"
+                        required
+                      />
+                    )}
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                      Servicio Realizado *
+                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                      <span>Región / Comuna *</span>
+                      <button
+                        type="button"
+                        onClick={() => setEditInputModeRegion(prev => prev === "select" ? "custom" : "select")}
+                        className="text-[10px] text-blue-600 hover:underline font-bold"
+                      >
+                        {editInputModeRegion === "select" ? "✏️ Escribir manual" : "📋 Elegir del catálogo"}
+                      </button>
                     </label>
-                    <input 
-                      type="text"
-                      name="servicioRealizado"
-                      value={editFormData.servicioRealizado}
-                      onChange={handleEditInputChange}
-                      placeholder="Ej: Retiro de residuos metalúrgicos"
-                      className="w-full px-4 py-2.5 border border-slate-200 bg-slate-50 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-sm transition-all"
-                      required
-                    />
+                    {editInputModeRegion === "select" ? (
+                      <select
+                        name="regionComuna"
+                        value={editFormData.regionComuna || ""}
+                        onChange={(e) => {
+                          if (e.target.value === "__MANAGE__") {
+                            setVistaActiva("nomencladores");
+                            setTabActivoNomenclador("regiones");
+                            setEditandoServicio(null);
+                            setEditFormData(null);
+                            triggerNotificacion("Abriendo administración de regiones...", "info");
+                          } else {
+                            setEditFormData(prev => prev ? ({ ...prev, regionComuna: e.target.value }) : null);
+                          }
+                        }}
+                        className="w-full px-4 py-2.5 border border-slate-200 bg-slate-50 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-sm font-semibold transition-all appearance-none cursor-pointer"
+                        required
+                      >
+                        <option value="">-- Seleccione Región / Comuna --</option>
+                        {catRegiones.map(r => (
+                          <option key={r.id} value={r.nombre}>{r.nombre}</option>
+                        ))}
+                        <option value="__MANAGE__" className="text-blue-600 font-bold">⚙️ Administrar Catálogo...</option>
+                      </select>
+                    ) : (
+                      <input 
+                        type="text"
+                        name="regionComuna"
+                        value={editFormData.regionComuna || ""}
+                        onChange={handleEditInputChange}
+                        placeholder="Ej: Antofagasta / Sierra Gorda"
+                        className="w-full px-4 py-2.5 border border-slate-200 bg-slate-50 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-sm font-semibold transition-all"
+                        required
+                      />
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                      <span>Servicio Realizado *</span>
+                      <button
+                        type="button"
+                        onClick={() => setEditInputModeServicio(prev => prev === "select" ? "custom" : "select")}
+                        className="text-[10px] text-blue-600 hover:underline font-bold"
+                      >
+                        {editInputModeServicio === "select" ? "✏️ Escribir manual" : "📋 Elegir del catálogo"}
+                      </button>
+                    </label>
+                    {editInputModeServicio === "select" ? (
+                      <select
+                        name="servicioRealizado"
+                        value={editFormData.servicioRealizado}
+                        onChange={(e) => {
+                          if (e.target.value === "__MANAGE__") {
+                            setVistaActiva("nomencladores");
+                            setTabActivoNomenclador("servicios");
+                            setEditandoServicio(null);
+                            setEditFormData(null);
+                            triggerNotificacion("Abriendo administración de servicios...", "info");
+                          } else {
+                            setEditFormData(prev => prev ? ({ ...prev, servicioRealizado: e.target.value }) : null);
+                          }
+                        }}
+                        className="w-full px-4 py-2.5 border border-slate-200 bg-slate-50 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-sm font-semibold transition-all appearance-none cursor-pointer"
+                        required
+                      >
+                        <option value="">-- Seleccione Servicio Realizado --</option>
+                        {catServicios.map(s => (
+                          <option key={s.id} value={s.nombre}>{s.nombre}</option>
+                        ))}
+                        <option value="__MANAGE__" className="text-blue-600 font-bold">⚙️ Administrar Catálogo...</option>
+                      </select>
+                    ) : (
+                      <input 
+                        type="text"
+                        name="servicioRealizado"
+                        value={editFormData.servicioRealizado}
+                        onChange={handleEditInputChange}
+                        placeholder="Ej: Retiro de residuos metalúrgicos"
+                        className="w-full px-4 py-2.5 border border-slate-200 bg-slate-50 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-sm transition-all"
+                        required
+                      />
+                    )}
                   </div>
                 </div>
 
@@ -2286,6 +3308,7 @@ export default function App() {
         </div>
       </footer>
 
+      </div>
     </div>
   );
 }
