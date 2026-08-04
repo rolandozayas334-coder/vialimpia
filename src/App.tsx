@@ -222,6 +222,32 @@ export default function App() {
     }
   }, [configEmpresa.tituloPestana]);
 
+  // System Users State with localStorage synchronization
+  const [usuarios, setUsuarios] = useState<Usuario[]>(() => {
+    const saved = localStorage.getItem("vialimpia_usuarios_v2");
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error("Error reading users database", e);
+      }
+    }
+    return [
+      {
+        id: "admin-default",
+        usuario: "admin",
+        nombre: "Administrador Sistema",
+        contrasena: "admin123",
+        rol: "Administrador"
+      }
+    ];
+  });
+
+  // Sync users to localStorage
+  useEffect(() => {
+    localStorage.setItem("vialimpia_usuarios_v2", JSON.stringify(usuarios));
+  }, [usuarios]);
+
   // Server Database synchronization states
   const [estadoServidor, setEstadoServidor] = useState<"conectando" | "conectado" | "error">("conectando");
   const [isInitialServerLoad, setIsInitialServerLoad] = useState<boolean>(true);
@@ -381,32 +407,6 @@ export default function App() {
     setNotificacion({ mensaje, tipo });
     setTimeout(() => setNotificacion(null), 4000);
   };
-
-  // System Users State with localStorage synchronization
-  const [usuarios, setUsuarios] = useState<Usuario[]>(() => {
-    const saved = localStorage.getItem("vialimpia_usuarios_v2");
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error("Error reading users database", e);
-      }
-    }
-    return [
-      {
-        id: "admin-default",
-        usuario: "admin",
-        nombre: "Administrador Sistema",
-        contrasena: "admin123",
-        rol: "Administrador"
-      }
-    ];
-  });
-
-  // Sync users to localStorage
-  useEffect(() => {
-    localStorage.setItem("vialimpia_usuarios_v2", JSON.stringify(usuarios));
-  }, [usuarios]);
 
   // Logged in User state
   const [usuarioActual, setUsuarioActual] = useState<Usuario | null>(() => {
