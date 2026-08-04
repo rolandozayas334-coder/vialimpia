@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, type ChangeEvent, type FormEvent } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback, type ChangeEvent, type FormEvent } from "react";
 import { 
   Truck, 
   Calendar, 
@@ -27,7 +27,10 @@ import {
   MapPin,
   Building2,
   Menu,
-  Settings
+  Settings,
+  Database,
+  Server,
+  Globe
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { jsPDF } from "jspdf";
@@ -188,26 +191,118 @@ export default function App() {
     localStorage.setItem("vialimpia_cat_regiones", JSON.stringify(catRegiones));
   }, [catRegiones]);
 
-  // Company and Vehicle License Plate Configuration State
-  const [configEmpresa, setConfigEmpresa] = useState<{ nombreEmpresa: string; patenteVehiculo: string }>(() => {
+  // Company Configuration State
+  const [configEmpresa, setConfigEmpresa] = useState<{ nombreEmpresa: string; tituloPestana: string }>(() => {
     const saved = localStorage.getItem("vialimpia_config");
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         return {
           nombreEmpresa: parsed.nombreEmpresa || "VIA LIMPIA SPA",
-          patenteVehiculo: parsed.patenteVehiculo || "TFTB63"
+          tituloPestana: parsed.tituloPestana || "VIA LIMPIA SPA - Control de Servicios"
         };
       } catch (e) {
         console.error("Error reading config", e);
       }
     }
-    return { nombreEmpresa: "VIA LIMPIA SPA", patenteVehiculo: "TFTB63" };
+    return { 
+      nombreEmpresa: "VIA LIMPIA SPA",
+      tituloPestana: "VIA LIMPIA SPA - Control de Servicios"
+    };
   });
 
   useEffect(() => {
     localStorage.setItem("vialimpia_config", JSON.stringify(configEmpresa));
   }, [configEmpresa]);
+
+  // Synchronize browser tab title dynamically
+  useEffect(() => {
+    if (configEmpresa.tituloPestana) {
+      document.title = configEmpresa.tituloPestana;
+    }
+  }, [configEmpresa.tituloPestana]);
+
+  // Server Database synchronization states
+  const [estadoServidor, setEstadoServidor] = useState<"conectando" | "conectado" | "error">("conectando");
+  const [isInitialServerLoad, setIsInitialServerLoad] = useState<boolean>(true);
+
+  // Load complete DB from Server on app mount
+  useEffect(() => {
+    const cargarDesdeServidor = async () => {
+      try {
+        const res = await fetch("/api/db");
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && json.data) {
+            const { servicios: srv, usuarios: usr, catalogos, configuracion } = json.data;
+            if (Array.isArray(srv)) setServicios(srv);
+            if (Array.isArray(usr) && usr.length > 0) setUsuarios(usr);
+            if (catalogos) {
+              if (Array.isArray(catalogos.conductores)) setCatConductores(catalogos.conductores);
+              if (Array.isArray(catalogos.clientes)) setCatClientes(catalogos.clientes);
+              if (Array.isArray(catalogos.regiones)) setCatRegiones(catalogos.regiones);
+            }
+            if (configuracion) {
+              setConfigEmpresa({
+                nombreEmpresa: configuracion.nombreEmpresa || "VIA LIMPIA SPA",
+                tituloPestana: configuracion.tituloPestana || "VIA LIMPIA SPA - Control de Servicios"
+              });
+            }
+          }
+          setEstadoServidor("conectado");
+        } else {
+          setEstadoServidor("error");
+        }
+      } catch (err) {
+        console.warn("No se pudo conectar al servidor de base de datos:", err);
+        setEstadoServidor("error");
+      } finally {
+        setIsInitialServerLoad(false);
+      }
+    };
+
+    cargarDesdeServidor();
+  }, []);
+
+  // Save complete state to Server database
+  const guardarEnServidor = useCallback(async (datosOverride?: any) => {
+    const payload = datosOverride || {
+      servicios,
+      usuarios,
+      catalogos: {
+        conductores: catConductores,
+        clientes: catClientes,
+        regiones: catRegiones
+      },
+      configuracion: configEmpresa,
+      ultimaActualizacion: new Date().toISOString()
+    };
+
+    try {
+      const res = await fetch("/api/db", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ data: payload })
+      });
+      if (res.ok) {
+        setEstadoServidor("conectado");
+      } else {
+        setEstadoServidor("error");
+      }
+    } catch (err) {
+      console.error("Error guardando en el servidor:", err);
+      setEstadoServidor("error");
+    }
+  }, [servicios, usuarios, catConductores, catClientes, catRegiones, configEmpresa]);
+
+  // Auto-persist changes to Server Database after initial load completes
+  useEffect(() => {
+    if (isInitialServerLoad) return;
+    const timer = setTimeout(() => {
+      guardarEnServidor();
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [servicios, usuarios, catConductores, catClientes, catRegiones, configEmpresa, isInitialServerLoad, guardarEnServidor]);
 
   // Catalog Active Subtab state
   const [tabActivoNomenclador, setTabActivoNomenclador] = useState<"conductores" | "clientes" | "regiones">("conductores");
@@ -257,7 +352,7 @@ export default function App() {
     pesoEstimado: "",
     numGuia: "",
     conductor: "",
-    patente: configEmpresa.patenteVehiculo || "TFTB63"
+    patente: "TFTB63"
   });
 
   // Filter & search states
@@ -624,7 +719,7 @@ export default function App() {
     setEditandoServicio(servicio);
     setEditFormData({
       ...servicio,
-      patente: servicio.patente || configEmpresa.patenteVehiculo || "TFTB63"
+      patente: servicio.patente || "TFTB63"
     });
   };
 
@@ -665,7 +760,7 @@ export default function App() {
 
     const servicioGuardado: Servicio = {
       ...editFormData,
-      patente: (editFormData.patente || configEmpresa.patenteVehiculo || "TFTB63").trim().toUpperCase(),
+      patente: (editFormData.patente || "TFTB63").trim().toUpperCase(),
       numSidrep: editFormData.numSidrep.trim() || "N/A",
       pesoEstimado: editFormData.numSidrep.trim() && editFormData.numSidrep !== "N/A" ? (editFormData.pesoEstimado || "0") : "0",
       numGuia: editFormData.numGuia.trim() || "N/A",
@@ -696,7 +791,7 @@ export default function App() {
     const nuevoServicio: Servicio = {
       ...formData,
       id: Date.now().toString(),
-      patente: (formData.patente || configEmpresa.patenteVehiculo || "TFTB63").trim().toUpperCase(),
+      patente: (formData.patente || "TFTB63").trim().toUpperCase(),
       numSidrep: formData.numSidrep.trim() || "N/A",
       pesoEstimado: formData.numSidrep.trim() ? (formData.pesoEstimado || "0") : "0",
       numGuia: formData.numGuia.trim() || "N/A",
@@ -717,7 +812,7 @@ export default function App() {
       pesoEstimado: "",
       numGuia: "",
       conductor: prev.conductor,
-      patente: prev.patente || configEmpresa.patenteVehiculo || "TFTB63"
+      patente: prev.patente || "TFTB63"
     }));
   };
 
@@ -729,13 +824,14 @@ export default function App() {
     }
   };
 
-  // Export local JSON DB (Servicios + Nomencladores + Configuración)
+  // Export local JSON DB (Servicios + Usuarios + Nomencladores + Configuración)
   const exportarBaseDatos = () => {
     try {
       const backupData = {
         version: "2.6",
         fechaRespaldo: new Date().toISOString(),
         configuracion: configEmpresa,
+        usuarios: usuarios,
         servicios: servicios,
         catalogos: {
           conductores: catConductores,
@@ -747,20 +843,20 @@ export default function App() {
       const dataStr = JSON.stringify(backupData, null, 2);
       const dataUri = "data:application/json;charset=utf-8," + encodeURIComponent(dataStr);
       const nombreEmpresaClean = configEmpresa.nombreEmpresa.replace(/\s+/g, "_");
-      const nombreArchivo = `BD_${nombreEmpresaClean}_${configEmpresa.patenteVehiculo}_${new Date().toISOString().split("T")[0]}.json`;
+      const nombreArchivo = `BD_${nombreEmpresaClean}_${new Date().toISOString().split("T")[0]}.json`;
 
       const linkElement = document.createElement("a");
       linkElement.setAttribute("href", dataUri);
       linkElement.setAttribute("download", nombreArchivo);
       linkElement.click();
 
-      triggerNotificacion("Base de datos, catálogos y configuración exportados con éxito.");
+      triggerNotificacion("Base de datos completa (servicios, usuarios, catálogos) exportada con éxito.");
     } catch (error) {
       triggerNotificacion("Ocurrió un error al exportar la base de datos.", "error");
     }
   };
 
-  // Import local JSON DB (Servicios + Nomencladores)
+  // Import local JSON DB (Servicios + Usuarios + Nomencladores + Configuración)
   const importarBaseDatos = (e: ChangeEvent<HTMLInputElement>) => {
     const fileReader = new FileReader();
     const file = e.target.files?.[0];
@@ -779,16 +875,16 @@ export default function App() {
                 ...item,
                 regionComuna: item.regionComuna || "N/A",
                 conductor: item.conductor || item.chofer || "Sin Conductor",
-                patente: (item.patente || item.patenteVehiculo || configEmpresa.patenteVehiculo || "TFTB63").toUpperCase()
+                patente: (item.patente || item.patenteVehiculo || "TFTB63").toUpperCase()
               }));
               setServicios(migracion);
-              triggerNotificacion("Base de datos importada y restaurada con éxito.");
+              triggerNotificacion("Base de datos de servicios importada y restaurada con éxito.");
             }
           } else {
             triggerNotificacion("El archivo no tiene el formato correcto de base de datos.", "error");
           }
         } 
-        // Case 2: Structured backup object containing servicios & catalogos
+        // Case 2: Structured backup object containing servicios, usuarios, catalogos & configuracion
         else if (parsed && typeof parsed === "object") {
           const rawServicios = parsed.servicios || parsed.data || [];
           if (!Array.isArray(rawServicios)) {
@@ -804,10 +900,14 @@ export default function App() {
 
           const numServs = rawServicios.length;
           const tieneCatalogos = parsed.catalogos && typeof parsed.catalogos === "object";
+          const tieneUsuarios = Array.isArray(parsed.usuarios) && parsed.usuarios.length > 0;
           
           let msj = `Se restaurarán ${numServs} registros de servicios`;
           if (tieneCatalogos) {
-            msj += ` y todos los catálogos de nomencladores (Conductores, Clientes, Regiones)`;
+            msj += `, los catálogos de nomencladores`;
+          }
+          if (tieneUsuarios) {
+            msj += ` y los usuarios del sistema (${parsed.usuarios.length})`;
           }
           msj += `. Esto reemplazará los datos actuales. ¿Deseas continuar?`;
 
@@ -816,7 +916,7 @@ export default function App() {
               ...item,
               regionComuna: item.regionComuna || "N/A",
               conductor: item.conductor || item.chofer || "Sin Conductor",
-              patente: (item.patente || item.patenteVehiculo || configEmpresa.patenteVehiculo || "TFTB63").toUpperCase()
+              patente: (item.patente || item.patenteVehiculo || "TFTB63").toUpperCase()
             }));
             setServicios(migracion);
 
@@ -832,14 +932,17 @@ export default function App() {
               }
             }
 
+            if (tieneUsuarios) {
+              setUsuarios(parsed.usuarios);
+            }
+
             if (parsed.configuracion && typeof parsed.configuracion === "object") {
               setConfigEmpresa({
-                nombreEmpresa: parsed.configuracion.nombreEmpresa || "VIA LIMPIA SPA",
-                patenteVehiculo: parsed.configuracion.patenteVehiculo || "TFTB63"
+                nombreEmpresa: parsed.configuracion.nombreEmpresa || "VIA LIMPIA SPA"
               });
             }
 
-            triggerNotificacion("¡Base de datos, catálogos y configuración restaurados tal cual con éxito!");
+            triggerNotificacion("¡Base de datos completa (servicios, usuarios, catálogos) restaurada tal cual con éxito!");
           }
         } else {
           triggerNotificacion("El archivo JSON no contiene un formato de respaldo válido.", "error");
@@ -855,10 +958,10 @@ export default function App() {
   // Unique list of vehicle license plates / matrículas for interactive filters
   const listaPatentes = useMemo(() => {
     const patentes = servicios
-      .map(s => (s.patente || configEmpresa.patenteVehiculo || "TFTB63").trim().toUpperCase())
+      .map(s => (s.patente || "TFTB63").trim().toUpperCase())
       .filter(Boolean);
     return ["Todos", ...Array.from(new Set(patentes))];
-  }, [servicios, configEmpresa.patenteVehiculo]);
+  }, [servicios]);
 
   // Unique list of conductors for interactive filters
   const listaConductores = useMemo(() => {
@@ -876,7 +979,7 @@ export default function App() {
   const serviciosFiltrados = useMemo(() => {
     return servicios.filter(s => {
       const q = busqueda.toLowerCase();
-      const patenteVal = (s.patente || configEmpresa.patenteVehiculo || "TFTB63").toUpperCase();
+      const patenteVal = (s.patente || "TFTB63").toUpperCase();
       const cumpleBusqueda = 
         s.numServicio.toLowerCase().includes(q) ||
         s.razonSocial.toLowerCase().includes(q) ||
@@ -1037,7 +1140,7 @@ export default function App() {
     doc.setFont("helvetica", "normal");
     const patenteTextoDoc = reportePatente !== "Todos" 
       ? reportePatente.toUpperCase() 
-      : (configEmpresa.patenteVehiculo ? `${configEmpresa.patenteVehiculo.toUpperCase()} (o según servicio)` : "Todas");
+      : "Todas las matrículas registradas";
     doc.text(patenteTextoDoc, 52, 37);
 
     doc.setFont("helvetica", "bold");
@@ -1070,7 +1173,7 @@ export default function App() {
       // Table mapping for autoTable
       const filasDeTabla = listaDeEstaFecha.map(item => [
         item.numServicio,
-        (item.patente || configEmpresa.patenteVehiculo || "TFTB63").toUpperCase(),
+        (item.patente || "TFTB63").toUpperCase(),
         item.razonSocial,
         item.regionComuna || "N/A",
         item.servicioRealizado,
@@ -1566,12 +1669,23 @@ export default function App() {
                 <h1 className="text-base sm:text-lg font-bold tracking-tight text-slate-900 uppercase font-display flex items-center gap-2">
                   <span>{configEmpresa.nombreEmpresa}</span>
                   <span className="text-[10px] bg-slate-100 text-slate-500 font-bold px-2 py-0.5 rounded-full lowercase tracking-normal hidden sm:inline">v2.6</span>
+                  {estadoServidor === "conectado" ? (
+                    <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200/80 font-bold px-2.5 py-0.5 rounded-full tracking-tight hidden md:inline-flex items-center gap-1.5 shadow-2xs">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                      <span>Servidor Central</span>
+                    </span>
+                  ) : (
+                    <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-200/80 font-bold px-2.5 py-0.5 rounded-full tracking-tight hidden md:inline-flex items-center gap-1.5 shadow-2xs">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                      <span>Modo Local</span>
+                    </span>
+                  )}
                 </h1>
                 <p className="text-[10px] text-slate-500 font-semibold tracking-wider uppercase">
                   {vistaActiva === "servicios" && "Servicios de camiones y reportes pdf"}
                   {vistaActiva === "nomencladores" && "Administración de catálogos y maestros"}
                   {vistaActiva === "usuarios" && "Gestión de cuentas de usuarios y roles"}
-                  {vistaActiva === "configuracion" && "Ajustes de empresa y patente del vehículo"}
+                  {vistaActiva === "configuracion" && "Ajustes de empresa, pestaña y base de datos"}
                 </p>
               </div>
             </div>
@@ -2207,26 +2321,26 @@ export default function App() {
               <div>
                 <div className="flex items-center gap-2 text-blue-600 font-bold text-xs uppercase tracking-wider mb-2">
                   <Settings className="w-4 h-4" />
-                  <span>Ajustes Generales de Flota</span>
+                  <span>Ajustes Generales del Sistema</span>
                 </div>
                 <h2 className="text-xl sm:text-2xl font-bold text-slate-900 uppercase font-display">
-                  Configuración de Empresa y Vehículo
+                  Configuración Global
                 </h2>
                 <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1">
-                  Personaliza la razón social de la empresa y la patente del camión principal. Estos datos actualizan automáticamente los encabezados de reportes PDF y menús.
+                  Personaliza la razón social, el título visible en la pestaña del navegador y la sincronización con el servidor central.
                 </p>
               </div>
             </div>
 
-            {/* Form Card */}
+            {/* Form Card 1: Datos de Identificación y Pestaña del Navegador */}
             <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-xs space-y-6">
               <div className="border-b border-slate-100 pb-4">
                 <h3 className="font-bold text-slate-900 text-base uppercase font-display flex items-center gap-2">
                   <Building2 className="w-5 h-5 text-blue-600" />
-                  <span>Datos Identificatorios de Flota</span>
+                  <span>Datos de la Empresa y Pestaña del Navegador</span>
                 </h3>
                 <p className="text-xs text-slate-500 mt-1">
-                  Ingresa el nombre corporativo y la patente del camión que deben figurar en la documentación oficial.
+                  Ingresa el nombre corporativo y define el título personalizado para la pestaña del navegador.
                 </p>
               </div>
 
@@ -2234,7 +2348,8 @@ export default function App() {
                 onSubmit={(e) => {
                   e.preventDefault();
                   ejecutarOperacionAsincrona("Guardando configuración...", () => {
-                    triggerNotificacion("Configuración de empresa y patente guardada correctamente.");
+                    guardarEnServidor();
+                    triggerNotificacion("Configuración guardada y sincronizada correctamente.");
                   });
                 }} 
                 className="space-y-6"
@@ -2247,7 +2362,7 @@ export default function App() {
                     type="text"
                     value={configEmpresa.nombreEmpresa}
                     onChange={(e) => setConfigEmpresa(prev => ({ ...prev, nombreEmpresa: e.target.value }))}
-                    placeholder="Ej: Via Limpia"
+                    placeholder="Ej: VIA LIMPIA SPA"
                     className="w-full px-4 py-3 border border-slate-200 bg-slate-50 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm font-bold text-slate-800 transition-all"
                     required
                   />
@@ -2258,35 +2373,121 @@ export default function App() {
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                    Patente / Matrícula del Vehículo *
+                    Título de la Pestaña del Navegador *
                   </label>
                   <input
                     type="text"
-                    value={configEmpresa.patenteVehiculo}
-                    onChange={(e) => setConfigEmpresa(prev => ({ ...prev, patenteVehiculo: e.target.value.toUpperCase() }))}
-                    placeholder="Ej: TFTB63"
-                    className="w-full px-4 py-3 border border-slate-200 bg-slate-50 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm font-extrabold font-mono text-slate-800 uppercase tracking-wider transition-all"
+                    value={configEmpresa.tituloPestana}
+                    onChange={(e) => setConfigEmpresa(prev => ({ ...prev, tituloPestana: e.target.value }))}
+                    placeholder="Ej: VIA LIMPIA SPA - Control de Servicios"
+                    className="w-full px-4 py-3 border border-slate-200 bg-slate-50 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm font-bold text-slate-800 transition-all"
                     required
                   />
                   <p className="text-[11px] text-slate-400 mt-1.5">
-                    Identificación principal del camión para los controles y reportes consolidados.
+                    Reemplaza el texto por defecto en la pestaña de la ventana de tu navegador en tiempo real.
                   </p>
                 </div>
 
                 <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
                   <div className="text-xs text-slate-500 font-semibold flex items-center gap-2">
                     <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
-                    <span>Guardado local inmediato sincronizado con respaldos JSON.</span>
+                    <span>Cambios aplicados de inmediato en interfaz y servidor.</span>
                   </div>
                   <button
                     type="submit"
                     className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-full shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 text-xs uppercase tracking-wider cursor-pointer active:scale-95"
                   >
                     <CheckCircle className="w-4 h-4" />
-                    <span>Guardar Configuración</span>
+                    <span>Guardar Ajustes</span>
                   </button>
                 </div>
               </form>
+            </div>
+
+            {/* Form Card 2: Server Database Status & Sync */}
+            <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-xs space-y-6">
+              <div className="border-b border-slate-100 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base uppercase font-display flex items-center gap-2">
+                    <Server className="w-5 h-5 text-blue-600" />
+                    <span>Base de Datos Centralizada en Servidor</span>
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Todos los datos (Servicios, Usuarios, Catálogos y Configuración) se almacenan en el servidor para acceso multi-dispositivo.
+                  </p>
+                </div>
+                <div>
+                  {estadoServidor === "conectado" ? (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                      <span>🟢 Conectado al Servidor</span>
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                      <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                      <span>🟠 Conectando a Servidor</span>
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200/80 space-y-3">
+                <div className="flex items-start gap-3">
+                  <Database className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                      Acceso Universal desde Cualquier Dispositivo
+                    </h4>
+                    <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                      La información guardada se procesa directamente a través del servidor del sistema. Al abrir la aplicación desde una laptop, tablet o teléfono móvil, se cargarán de forma automática los mismos registros y reportes en tiempo real.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    ejecutarOperacionAsincrona("Guardando en Servidor...", async () => {
+                      await guardarEnServidor();
+                      triggerNotificacion("Base de datos guardada y sincronizada en el servidor.");
+                    });
+                  }}
+                  className="w-full sm:w-auto bg-slate-900 hover:bg-slate-800 text-white font-bold px-6 py-3 rounded-2xl transition-all flex items-center justify-center gap-2 text-xs uppercase tracking-wider cursor-pointer active:scale-95 shadow-sm"
+                >
+                  <Server className="w-4 h-4 text-emerald-400" />
+                  <span>Sincronizar Manualmente en Servidor</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    ejecutarOperacionAsincrona("Cargando desde Servidor...", async () => {
+                      const res = await fetch("/api/db");
+                      if (res.ok) {
+                        const json = await res.json();
+                        if (json.success && json.data) {
+                          const { servicios: srv, usuarios: usr, catalogos, configuracion } = json.data;
+                          if (Array.isArray(srv)) setServicios(srv);
+                          if (Array.isArray(usr) && usr.length > 0) setUsuarios(usr);
+                          if (catalogos) {
+                            if (Array.isArray(catalogos.conductores)) setCatConductores(catalogos.conductores);
+                            if (Array.isArray(catalogos.clientes)) setCatClientes(catalogos.clientes);
+                            if (Array.isArray(catalogos.regiones)) setCatRegiones(catalogos.regiones);
+                          }
+                          if (configuracion) setConfigEmpresa(configuracion);
+                          triggerNotificacion("Datos actualizados exitosamente desde el servidor.");
+                        }
+                      }
+                    });
+                  }}
+                  className="w-full sm:w-auto bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-6 py-3 rounded-2xl transition-all flex items-center justify-center gap-2 text-xs uppercase tracking-wider cursor-pointer active:scale-95 border border-slate-200"
+                >
+                  <Globe className="w-4 h-4 text-blue-600" />
+                  <span>Recargar Datos del Servidor</span>
+                </button>
+              </div>
             </div>
           </div>
         ) : (
@@ -2888,7 +3089,7 @@ export default function App() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-slate-100 text-slate-800 border border-slate-200 uppercase tracking-wider">
-                          {item.patente || configEmpresa.patenteVehiculo || "TFTB63"}
+                          {item.patente || "TFTB63"}
                         </span>
                       </td>
                       <td className="px-6 py-4 font-bold text-slate-800">
