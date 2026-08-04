@@ -45,6 +45,7 @@ interface Servicio {
   pesoEstimado: string;
   numGuia: string;
   conductor: string; // Renamed from chofer according to instructions
+  patente?: string; // Matrícula/Patente del vehículo del servicio
 }
 
 // Define interface for system users
@@ -56,7 +57,7 @@ interface Usuario {
   rol: "Administrador" | "Operador" | "Conductor";
 }
 
-// Initial seed data with "conductor"
+// Initial seed data with "conductor" and "patente"
 const DEFAULTS_SERVICIOS: Servicio[] = [
   {
     id: "1",
@@ -68,7 +69,8 @@ const DEFAULTS_SERVICIOS: Servicio[] = [
     numSidrep: "SD-44510",
     pesoEstimado: "4500",
     numGuia: "GD-778901",
-    conductor: "Carlos Mendoza"
+    conductor: "Carlos Mendoza",
+    patente: "TFTB63"
   },
   {
     id: "2",
@@ -80,7 +82,8 @@ const DEFAULTS_SERVICIOS: Servicio[] = [
     numSidrep: "N/A",
     pesoEstimado: "0",
     numGuia: "GD-778902",
-    conductor: "Juan Pablo Silva"
+    conductor: "Juan Pablo Silva",
+    patente: "TFTB63"
   },
   {
     id: "3",
@@ -92,7 +95,8 @@ const DEFAULTS_SERVICIOS: Servicio[] = [
     numSidrep: "N/A",
     pesoEstimado: "0",
     numGuia: "GD-778915",
-    conductor: "Carlos Mendoza"
+    conductor: "Carlos Mendoza",
+    patente: "GHJK12"
   },
   {
     id: "4",
@@ -104,7 +108,8 @@ const DEFAULTS_SERVICIOS: Servicio[] = [
     numSidrep: "SD-44320",
     pesoEstimado: "8200",
     numGuia: "GD-775402",
-    conductor: "Mauricio Ortega"
+    conductor: "Mauricio Ortega",
+    patente: "TFTB63"
   }
 ];
 
@@ -190,14 +195,14 @@ export default function App() {
       try {
         const parsed = JSON.parse(saved);
         return {
-          nombreEmpresa: parsed.nombreEmpresa || "Via Limpia",
+          nombreEmpresa: parsed.nombreEmpresa || "VIA LIMPIA SPA",
           patenteVehiculo: parsed.patenteVehiculo || "TFTB63"
         };
       } catch (e) {
         console.error("Error reading config", e);
       }
     }
-    return { nombreEmpresa: "Via Limpia", patenteVehiculo: "TFTB63" };
+    return { nombreEmpresa: "VIA LIMPIA SPA", patenteVehiculo: "TFTB63" };
   });
 
   useEffect(() => {
@@ -251,13 +256,15 @@ export default function App() {
     numSidrep: "",
     pesoEstimado: "",
     numGuia: "",
-    conductor: ""
+    conductor: "",
+    patente: configEmpresa.patenteVehiculo || "TFTB63"
   });
 
   // Filter & search states
   const [busqueda, setBusqueda] = useState<string>("");
   const [filtroConductor, setFiltroConductor] = useState<string>("Todos");
   const [filtroServicio, setFiltroServicio] = useState<string>("Todos");
+  const [filtroPatente, setFiltroPatente] = useState<string>("Todos");
 
   // PDF report settings
   const [reporteTipo, setReporteTipo] = useState<"dia" | "rango" | "mes">("mes");
@@ -266,6 +273,7 @@ export default function App() {
   const [reporteFechaFin, setReporteFechaFin] = useState<string>("");
   const [reporteMes, setReporteMes] = useState<string>(new Date().toISOString().substring(0, 7));
   const [reporteServicio, setReporteServicio] = useState<string>("Todos");
+  const [reportePatente, setReportePatente] = useState<string>("Todos");
 
   // Modal and references
   const [mostrarAyudaPDF, setMostrarAyudaPDF] = useState<boolean>(false);
@@ -614,7 +622,10 @@ export default function App() {
 
   const iniciarEdicion = (servicio: Servicio) => {
     setEditandoServicio(servicio);
-    setEditFormData({ ...servicio });
+    setEditFormData({
+      ...servicio,
+      patente: servicio.patente || configEmpresa.patenteVehiculo || "TFTB63"
+    });
   };
 
   const handleEditInputChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -647,13 +658,14 @@ export default function App() {
     e.preventDefault();
     if (!editFormData) return;
 
-    if (!editFormData.fecha || !editFormData.numServicio || !editFormData.razonSocial || !editFormData.servicioRealizado || !editFormData.conductor) {
+    if (!editFormData.fecha || !editFormData.numServicio || !editFormData.patente || !editFormData.razonSocial || !editFormData.servicioRealizado || !editFormData.conductor) {
       triggerNotificacion("Por favor completa todos los campos obligatorios (*).", "error");
       return;
     }
 
     const servicioGuardado: Servicio = {
       ...editFormData,
+      patente: (editFormData.patente || configEmpresa.patenteVehiculo || "TFTB63").trim().toUpperCase(),
       numSidrep: editFormData.numSidrep.trim() || "N/A",
       pesoEstimado: editFormData.numSidrep.trim() && editFormData.numSidrep !== "N/A" ? (editFormData.pesoEstimado || "0") : "0",
       numGuia: editFormData.numGuia.trim() || "N/A",
@@ -676,7 +688,7 @@ export default function App() {
   // Add new service
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    if (!formData.fecha || !formData.numServicio || !formData.razonSocial || !formData.regionComuna || !formData.servicioRealizado || !formData.conductor) {
+    if (!formData.fecha || !formData.numServicio || !formData.patente || !formData.razonSocial || !formData.regionComuna || !formData.servicioRealizado || !formData.conductor) {
       triggerNotificacion("Por favor completa todos los campos obligatorios (*).", "error");
       return;
     }
@@ -684,6 +696,7 @@ export default function App() {
     const nuevoServicio: Servicio = {
       ...formData,
       id: Date.now().toString(),
+      patente: (formData.patente || configEmpresa.patenteVehiculo || "TFTB63").trim().toUpperCase(),
       numSidrep: formData.numSidrep.trim() || "N/A",
       pesoEstimado: formData.numSidrep.trim() ? (formData.pesoEstimado || "0") : "0",
       numGuia: formData.numGuia.trim() || "N/A",
@@ -693,7 +706,7 @@ export default function App() {
     setServicios(prev => [nuevoServicio, ...prev]);
     triggerNotificacion("¡Servicio ingresado y guardado correctamente!");
 
-    // Reset keeping date and conductor for fast repetitive logging
+    // Reset keeping date, conductor, and patente for fast repetitive logging
     setFormData(prev => ({
       fecha: prev.fecha,
       numServicio: "",
@@ -703,7 +716,8 @@ export default function App() {
       numSidrep: "",
       pesoEstimado: "",
       numGuia: "",
-      conductor: prev.conductor
+      conductor: prev.conductor,
+      patente: prev.patente || configEmpresa.patenteVehiculo || "TFTB63"
     }));
   };
 
@@ -764,7 +778,8 @@ export default function App() {
               const migracion = parsed.map(item => ({
                 ...item,
                 regionComuna: item.regionComuna || "N/A",
-                conductor: item.conductor || item.chofer || "Sin Conductor"
+                conductor: item.conductor || item.chofer || "Sin Conductor",
+                patente: (item.patente || item.patenteVehiculo || configEmpresa.patenteVehiculo || "TFTB63").toUpperCase()
               }));
               setServicios(migracion);
               triggerNotificacion("Base de datos importada y restaurada con éxito.");
@@ -800,7 +815,8 @@ export default function App() {
             const migracion = rawServicios.map((item: any) => ({
               ...item,
               regionComuna: item.regionComuna || "N/A",
-              conductor: item.conductor || item.chofer || "Sin Conductor"
+              conductor: item.conductor || item.chofer || "Sin Conductor",
+              patente: (item.patente || item.patenteVehiculo || configEmpresa.patenteVehiculo || "TFTB63").toUpperCase()
             }));
             setServicios(migracion);
 
@@ -818,7 +834,7 @@ export default function App() {
 
             if (parsed.configuracion && typeof parsed.configuracion === "object") {
               setConfigEmpresa({
-                nombreEmpresa: parsed.configuracion.nombreEmpresa || "Via Limpia",
+                nombreEmpresa: parsed.configuracion.nombreEmpresa || "VIA LIMPIA SPA",
                 patenteVehiculo: parsed.configuracion.patenteVehiculo || "TFTB63"
               });
             }
@@ -836,6 +852,14 @@ export default function App() {
     e.target.value = "";
   };
 
+  // Unique list of vehicle license plates / matrículas for interactive filters
+  const listaPatentes = useMemo(() => {
+    const patentes = servicios
+      .map(s => (s.patente || configEmpresa.patenteVehiculo || "TFTB63").trim().toUpperCase())
+      .filter(Boolean);
+    return ["Todos", ...Array.from(new Set(patentes))];
+  }, [servicios, configEmpresa.patenteVehiculo]);
+
   // Unique list of conductors for interactive filters
   const listaConductores = useMemo(() => {
     const conds = servicios.map(s => s.conductor.trim()).filter(Boolean);
@@ -852,6 +876,7 @@ export default function App() {
   const serviciosFiltrados = useMemo(() => {
     return servicios.filter(s => {
       const q = busqueda.toLowerCase();
+      const patenteVal = (s.patente || configEmpresa.patenteVehiculo || "TFTB63").toUpperCase();
       const cumpleBusqueda = 
         s.numServicio.toLowerCase().includes(q) ||
         s.razonSocial.toLowerCase().includes(q) ||
@@ -859,14 +884,16 @@ export default function App() {
         s.servicioRealizado.toLowerCase().includes(q) ||
         s.numSidrep.toLowerCase().includes(q) ||
         s.numGuia.toLowerCase().includes(q) ||
-        s.conductor.toLowerCase().includes(q);
+        s.conductor.toLowerCase().includes(q) ||
+        patenteVal.toLowerCase().includes(q);
 
       const cumpleConductor = filtroConductor === "Todos" || s.conductor === filtroConductor;
       const cumpleServicio = filtroServicio === "Todos" || s.servicioRealizado === filtroServicio;
+      const cumplePatente = filtroPatente === "Todos" || patenteVal === filtroPatente.toUpperCase();
 
-      return cumpleBusqueda && cumpleConductor && cumpleServicio;
+      return cumpleBusqueda && cumpleConductor && cumpleServicio && cumplePatente;
     });
-  }, [servicios, busqueda, filtroConductor, filtroServicio]);
+  }, [servicios, busqueda, filtroConductor, filtroServicio, filtroPatente, configEmpresa.patenteVehiculo]);
 
   // Helper date formatter DD/MM/YYYY
   const formatearFecha = (fechaStr: string) => {
@@ -941,8 +968,13 @@ export default function App() {
       subtituloPeriodo += ` | Servicio: ${reporteServicio}`;
     }
 
+    if (reportePatente !== "Todos") {
+      datosReporte = datosReporte.filter(s => (s.patente || configEmpresa.patenteVehiculo || "TFTB63").toUpperCase() === reportePatente.toUpperCase());
+      subtituloPeriodo += ` | Matrícula: ${reportePatente}`;
+    }
+
     if (datosReporte.length === 0) {
-      triggerNotificacion("No se encontraron registros para el periodo y servicio indicados.", "info");
+      triggerNotificacion("No se encontraron registros para el periodo y parámetros indicados.", "info");
       return;
     }
 
@@ -980,11 +1012,11 @@ export default function App() {
     doc.setFillColor(colorPrincipal[0], colorPrincipal[1], colorPrincipal[2]);
     doc.rect(0, 0, anchoCarta, 24, "F");
 
-    // Title in Header: dynamically uses configured company name and vehicle plate
+    // Title in Header: dynamically uses configured company name
     doc.setTextColor(255, 255, 255);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(13);
-    doc.text(`REPORTE OPERATIVO DE SERVICIOS - ${configEmpresa.nombreEmpresa.toUpperCase()} ${configEmpresa.patenteVehiculo.toUpperCase()}`, 12, 15);
+    doc.text(`REPORTE OPERATIVO DE SERVICIOS - ${configEmpresa.nombreEmpresa.toUpperCase()}`, 12, 15);
 
     // Meta-info top right
     doc.setFontSize(8.5);
@@ -994,19 +1026,29 @@ export default function App() {
     // Filter information under the header
     doc.setTextColor(colorTexto[0], colorTexto[1], colorTexto[2]);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(10.5);
-    doc.text("Periodo del Reporte:", 12, 32);
+    doc.setFontSize(9.5);
 
+    doc.text("Periodo del Reporte:", 12, 31);
     doc.setFont("helvetica", "normal");
-    doc.text(subtituloPeriodo, 55, 32);
-    doc.text(`Total Servicios: ${datosReporte.length}`, 200, 32);
+    doc.text(subtituloPeriodo, 52, 31);
+
+    doc.setFont("helvetica", "bold");
+    doc.text("Matrícula / Vehículo:", 12, 37);
+    doc.setFont("helvetica", "normal");
+    const patenteTextoDoc = reportePatente !== "Todos" 
+      ? reportePatente.toUpperCase() 
+      : (configEmpresa.patenteVehiculo ? `${configEmpresa.patenteVehiculo.toUpperCase()} (o según servicio)` : "Todas");
+    doc.text(patenteTextoDoc, 52, 37);
+
+    doc.setFont("helvetica", "bold");
+    doc.text(`Total Servicios: ${datosReporte.length}`, 200, 31);
 
     // Underline
     doc.setDrawColor(colorLineas[0], colorLineas[1], colorLineas[2]);
     doc.setLineWidth(0.4);
-    doc.line(12, 36, anchoCarta - 12, 36);
+    doc.line(12, 42, anchoCarta - 12, 42);
 
-    let posicionY = 42;
+    let posicionY = 48;
 
     Object.keys(serviciosAgrupados).forEach((fecha) => {
       const listaDeEstaFecha = serviciosAgrupados[fecha];
@@ -1025,21 +1067,22 @@ export default function App() {
 
       posicionY += 4;
 
-      // Table mapping for autoTable. Header changed from "Chofer" to "Conductor"
+      // Table mapping for autoTable
       const filasDeTabla = listaDeEstaFecha.map(item => [
         item.numServicio,
+        (item.patente || configEmpresa.patenteVehiculo || "TFTB63").toUpperCase(),
         item.razonSocial,
         item.regionComuna || "N/A",
         item.servicioRealizado,
         item.numSidrep,
         formatearPeso(item.pesoEstimado),
         item.numGuia,
-        item.conductor // Conductor instead of chofer
+        item.conductor
       ]);
 
       autoTable(doc, {
         startY: posicionY,
-        head: [["N° Serv.", "Razón Social / Cliente", "Región / Comuna", "Servicio Realizado", "N° SIDREP", "Peso Est.", "N° Guía Despacho", "Conductor"]],
+        head: [["N° Serv.", "Matrícula", "Razón Social / Cliente", "Región / Comuna", "Servicio Realizado", "N° SIDREP", "Peso Est.", "N° Guía Despacho", "Conductor"]],
         body: filasDeTabla,
         theme: "striped",
         headStyles: {
@@ -1054,14 +1097,15 @@ export default function App() {
           overflow: "linebreak"
         },
         columnStyles: {
-          0: { cellWidth: 15 }, // N° Serv
-          1: { cellWidth: 38 }, // Razón Social
-          2: { cellWidth: 35 }, // Región / Comuna
-          3: { cellWidth: 60 }, // Servicio realizado
-          4: { cellWidth: 24 }, // SIDREP
-          5: { cellWidth: 22 }, // Peso
-          6: { cellWidth: 30 }, // Guía
-          7: { cellWidth: 30 }  // Conductor (renamed from chofer)
+          0: { cellWidth: 14 }, // N° Serv
+          1: { cellWidth: 18 }, // Matrícula
+          2: { cellWidth: 35 }, // Razón Social
+          3: { cellWidth: 32 }, // Región / Comuna
+          4: { cellWidth: 55 }, // Servicio realizado
+          5: { cellWidth: 22 }, // SIDREP
+          6: { cellWidth: 20 }, // Peso
+          7: { cellWidth: 28 }, // Guía
+          8: { cellWidth: 28 }  // Conductor
         },
         margin: { left: 12, right: 12 },
         didDrawPage: function() {
@@ -1127,7 +1171,7 @@ export default function App() {
               <Truck className="w-8 h-8 text-white animate-pulse" />
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-white uppercase font-display">
-              Via Limpia TFTB63
+              {configEmpresa.nombreEmpresa || "VIA LIMPIA SPA"}
             </h1>
             <p className="text-xs text-slate-400 font-semibold tracking-wider uppercase mt-1">
               Control de Reportes Operativos
@@ -1235,7 +1279,7 @@ export default function App() {
               {configEmpresa.nombreEmpresa}
             </h1>
             <p className="text-[10px] text-slate-400 font-bold tracking-widest uppercase truncate">
-              {configEmpresa.patenteVehiculo} CONTROLES
+              SISTEMA DE CONTROLES
             </p>
           </div>
         </div>
@@ -1383,7 +1427,7 @@ export default function App() {
                     {configEmpresa.nombreEmpresa}
                   </h1>
                   <p className="text-[10px] text-slate-400 font-bold tracking-widest uppercase truncate">
-                    {configEmpresa.patenteVehiculo} CONTROLES
+                    SISTEMA DE CONTROLES
                   </p>
                 </div>
               </div>
@@ -1520,7 +1564,7 @@ export default function App() {
               </div>
               <div>
                 <h1 className="text-base sm:text-lg font-bold tracking-tight text-slate-900 uppercase font-display flex items-center gap-2">
-                  <span>{configEmpresa.nombreEmpresa} {configEmpresa.patenteVehiculo}</span>
+                  <span>{configEmpresa.nombreEmpresa}</span>
                   <span className="text-[10px] bg-slate-100 text-slate-500 font-bold px-2 py-0.5 rounded-full lowercase tracking-normal hidden sm:inline">v2.6</span>
                 </h1>
                 <p className="text-[10px] text-slate-500 font-semibold tracking-wider uppercase">
@@ -2296,8 +2340,8 @@ export default function App() {
 
             <form onSubmit={handleSubmit} className="space-y-5">
               
-              {/* Row 1: Date, Service ID, Conductor */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Row 1: Date, Service ID, Matrícula/Patente, Conductor */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div>
                   <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
                     Fecha del Servicio *
@@ -2328,6 +2372,24 @@ export default function App() {
                       onChange={handleInputChange}
                       placeholder="Ej: 1250"
                       className="w-full pl-8 pr-3 py-2.5 border border-slate-200 bg-slate-50 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-sm font-bold transition-all placeholder:font-normal"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                    Matrícula / Patente *
+                  </label>
+                  <div className="relative">
+                    <Truck className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
+                    <input 
+                      type="text"
+                      name="patente"
+                      value={formData.patente}
+                      onChange={(e) => setFormData(prev => ({ ...prev, patente: e.target.value.toUpperCase() }))}
+                      placeholder="Ej: TFTB63"
+                      className="w-full pl-10 pr-3 py-2.5 border border-slate-200 bg-slate-50 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-sm font-bold font-mono tracking-wider uppercase transition-all"
                       required
                     />
                   </div>
@@ -2667,22 +2729,41 @@ export default function App() {
                   )}
                 </div>
 
-                {/* Service Filter for Report */}
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                    Filtrar por Servicio Realizado
-                  </label>
-                  <select
-                    value={reporteServicio}
-                    onChange={(e) => setReporteServicio(e.target.value)}
-                    className="w-full px-3.5 py-2 border border-slate-200 bg-white rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-600 cursor-pointer"
-                  >
-                    {listaServiciosUnicos.map((serv, i) => (
-                      <option key={i} value={serv}>
-                        {serv === "Todos" ? "Todos los Servicios" : serv}
-                      </option>
-                    ))}
-                  </select>
+                {/* Matrícula/Patente Filter for Report */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                      Filtrar por Servicio
+                    </label>
+                    <select
+                      value={reporteServicio}
+                      onChange={(e) => setReporteServicio(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 bg-white rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-600 cursor-pointer"
+                    >
+                      {listaServiciosUnicos.map((serv, i) => (
+                        <option key={i} value={serv}>
+                          {serv === "Todos" ? "Todos los Servicios" : serv}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                      Filtrar por Matrícula
+                    </label>
+                    <select
+                      value={reportePatente}
+                      onChange={(e) => setReportePatente(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 bg-white rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-600 cursor-pointer uppercase font-mono"
+                    >
+                      {listaPatentes.map((pat, i) => (
+                        <option key={i} value={pat}>
+                          {pat === "Todos" ? "Todas" : pat}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </div>
             </div>
@@ -2708,7 +2789,7 @@ export default function App() {
             </div>
 
             {/* Live Filter Controls */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2.5">
               
               {/* Keyword Search */}
               <div className="relative">
@@ -2717,18 +2798,32 @@ export default function App() {
                   type="text"
                   value={busqueda}
                   onChange={(e) => setBusqueda(e.target.value)}
-                  placeholder="Buscar conductor, cliente, guía, servicio..."
+                  placeholder="Buscar matrícula, conductor, cliente..."
                   className="pl-9 pr-4 py-2 border border-slate-200 bg-white rounded-xl text-xs w-full focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium shadow-xs"
                 />
               </div>
 
+              {/* Matrícula/Patente Filter Dropdown */}
+              <div className="flex items-center space-x-1.5 bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-xs">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Matrícula:</span>
+                <select
+                  value={filtroPatente}
+                  onChange={(e) => setFiltroPatente(e.target.value)}
+                  className="bg-transparent text-xs font-bold text-slate-700 focus:outline-none pr-1 cursor-pointer font-mono uppercase"
+                >
+                  {listaPatentes.map((pat, i) => (
+                    <option key={i} value={pat}>{pat}</option>
+                  ))}
+                </select>
+              </div>
+
               {/* Conductor Filter Dropdown */}
-              <div className="flex items-center space-x-2 bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-xs">
+              <div className="flex items-center space-x-1.5 bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-xs">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Conductor:</span>
                 <select
                   value={filtroConductor}
                   onChange={(e) => setFiltroConductor(e.target.value)}
-                  className="bg-transparent text-xs font-bold text-slate-700 focus:outline-none pr-2 cursor-pointer"
+                  className="bg-transparent text-xs font-bold text-slate-700 focus:outline-none pr-1 cursor-pointer"
                 >
                   {listaConductores.map((cond, i) => (
                     <option key={i} value={cond}>{cond}</option>
@@ -2737,12 +2832,12 @@ export default function App() {
               </div>
 
               {/* Servicio Filter Dropdown */}
-              <div className="flex items-center space-x-2 bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-xs">
+              <div className="flex items-center space-x-1.5 bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-xs">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Servicio:</span>
                 <select
                   value={filtroServicio}
                   onChange={(e) => setFiltroServicio(e.target.value)}
-                  className="bg-transparent text-xs font-bold text-slate-700 focus:outline-none pr-2 cursor-pointer max-w-[160px] truncate"
+                  className="bg-transparent text-xs font-bold text-slate-700 focus:outline-none pr-1 cursor-pointer max-w-[140px] truncate"
                 >
                   {listaServiciosUnicos.map((serv, i) => (
                     <option key={i} value={serv}>
@@ -2769,28 +2864,34 @@ export default function App() {
               <table className="w-full border-collapse text-left text-xs text-slate-600">
                 <thead className="bg-white border-b border-slate-100 text-slate-400 font-bold uppercase tracking-widest">
                   <tr>
-                    <th className="px-8 py-4">Fecha</th>
-                    <th className="px-8 py-4">N° Serv</th>
-                    <th className="px-8 py-4">Cliente / Razón Social</th>
-                    <th className="px-8 py-4">Región / Comuna</th>
-                    <th className="px-8 py-4">Servicio Realizado</th>
-                    <th className="px-8 py-4">N° SIDREP</th>
-                    <th className="px-8 py-4">Carga (Est)</th>
-                    <th className="px-8 py-4">Guía Despacho</th>
-                    <th className="px-8 py-4">Conductor</th>
-                    <th className="px-8 py-4 text-center">Acciones</th>
+                    <th className="px-6 py-4">Fecha</th>
+                    <th className="px-6 py-4">N° Serv</th>
+                    <th className="px-6 py-4">Matrícula</th>
+                    <th className="px-6 py-4">Cliente / Razón Social</th>
+                    <th className="px-6 py-4">Región / Comuna</th>
+                    <th className="px-6 py-4">Servicio Realizado</th>
+                    <th className="px-6 py-4">N° SIDREP</th>
+                    <th className="px-6 py-4">Carga (Est)</th>
+                    <th className="px-6 py-4">Guía Despacho</th>
+                    <th className="px-6 py-4">Conductor</th>
+                    <th className="px-6 py-4 text-center">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
                   {serviciosFiltrados.map((item) => (
                     <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="px-8 py-4 whitespace-nowrap font-semibold text-slate-900">
+                      <td className="px-6 py-4 whitespace-nowrap font-semibold text-slate-900">
                         {formatearFecha(item.fecha)}
                       </td>
-                      <td className="px-8 py-4 font-bold text-blue-600">
+                      <td className="px-6 py-4 font-bold text-blue-600">
                         #{item.numServicio}
                       </td>
-                      <td className="px-8 py-4 font-bold text-slate-800">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-slate-100 text-slate-800 border border-slate-200 uppercase tracking-wider">
+                          {item.patente || configEmpresa.patenteVehiculo || "TFTB63"}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 font-bold text-slate-800">
                         {item.razonSocial}
                       </td>
                       <td className="px-8 py-4 font-bold text-slate-700 bg-slate-50/10">
@@ -3123,8 +3224,8 @@ export default function App() {
               </div>
 
               <form onSubmit={handleGuardarEdicion} className="space-y-5">
-                {/* Row 1: Date, Service ID, Conductor */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Row 1: Date, Service ID, Matrícula/Patente, Conductor */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div>
                     <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
                       Fecha del Servicio *
@@ -3155,6 +3256,24 @@ export default function App() {
                         onChange={handleEditInputChange}
                         placeholder="Ej: 1250"
                         className="w-full pl-8 pr-3 py-2.5 border border-slate-200 bg-slate-50 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-sm font-bold transition-all placeholder:font-normal"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                      Matrícula / Patente *
+                    </label>
+                    <div className="relative">
+                      <Truck className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
+                      <input 
+                        type="text"
+                        name="patente"
+                        value={editFormData.patente || ""}
+                        onChange={(e) => setEditFormData(prev => prev ? ({ ...prev, patente: e.target.value.toUpperCase() }) : null)}
+                        placeholder="Ej: TFTB63"
+                        className="w-full pl-10 pr-3 py-2.5 border border-slate-200 bg-slate-50 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-sm font-bold font-mono tracking-wider uppercase transition-all"
                         required
                       />
                     </div>
