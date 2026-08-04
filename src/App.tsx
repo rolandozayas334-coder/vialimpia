@@ -1073,7 +1073,7 @@ export default function App() {
 
     if (reportePatente !== "Todos") {
       datosReporte = datosReporte.filter(s => (s.patente || configEmpresa.patenteVehiculo || "TFTB63").toUpperCase() === reportePatente.toUpperCase());
-      subtituloPeriodo += ` | Matrícula: ${reportePatente}`;
+      subtituloPeriodo += ` | Patrón: ${reportePatente}`;
     }
 
     if (datosReporte.length === 0) {
@@ -1136,11 +1136,11 @@ export default function App() {
     doc.text(subtituloPeriodo, 52, 31);
 
     doc.setFont("helvetica", "bold");
-    doc.text("Matrícula / Vehículo:", 12, 37);
+    doc.text("Patrón:", 12, 37);
     doc.setFont("helvetica", "normal");
     const patenteTextoDoc = reportePatente !== "Todos" 
       ? reportePatente.toUpperCase() 
-      : "Todas las matrículas registradas";
+      : "Todos los patrones registrados";
     doc.text(patenteTextoDoc, 52, 37);
 
     doc.setFont("helvetica", "bold");
@@ -1185,7 +1185,7 @@ export default function App() {
 
       autoTable(doc, {
         startY: posicionY,
-        head: [["N° Serv.", "Matrícula", "Razón Social / Cliente", "Región / Comuna", "Servicio Realizado", "N° SIDREP", "Peso Est.", "N° Guía Despacho", "Conductor"]],
+        head: [["N° Serv.", "Patrón", "Razón Social / Cliente", "Región / Comuna", "Servicio Realizado", "N° SIDREP", "Peso Est.", "N° Guía Despacho", "Conductor"]],
         body: filasDeTabla,
         theme: "striped",
         headStyles: {
@@ -1201,7 +1201,7 @@ export default function App() {
         },
         columnStyles: {
           0: { cellWidth: 14 }, // N° Serv
-          1: { cellWidth: 18 }, // Matrícula
+          1: { cellWidth: 18 }, // Patrón
           2: { cellWidth: 35 }, // Razón Social
           3: { cellWidth: 32 }, // Región / Comuna
           4: { cellWidth: 55 }, // Servicio realizado
@@ -2580,7 +2580,7 @@ export default function App() {
 
                 <div>
                   <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                    Matrícula / Patente *
+                    Patrón *
                   </label>
                   <div className="relative">
                     <Truck className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
@@ -2930,7 +2930,7 @@ export default function App() {
                   )}
                 </div>
 
-                {/* Matrícula/Patente Filter for Report */}
+                {/* Patrón Filter for Report */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
@@ -2951,7 +2951,7 @@ export default function App() {
 
                   <div>
                     <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                      Filtrar por Matrícula
+                      Filtrar por Patrón
                     </label>
                     <select
                       value={reportePatente}
@@ -2960,7 +2960,7 @@ export default function App() {
                     >
                       {listaPatentes.map((pat, i) => (
                         <option key={i} value={pat}>
-                          {pat === "Todos" ? "Todas" : pat}
+                          {pat === "Todos" ? "Todos" : pat}
                         </option>
                       ))}
                     </select>
@@ -2999,14 +2999,14 @@ export default function App() {
                   type="text"
                   value={busqueda}
                   onChange={(e) => setBusqueda(e.target.value)}
-                  placeholder="Buscar matrícula, conductor, cliente..."
+                  placeholder="Buscar patrón, conductor, cliente..."
                   className="pl-9 pr-4 py-2 border border-slate-200 bg-white rounded-xl text-xs w-full focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium shadow-xs"
                 />
               </div>
 
-              {/* Matrícula/Patente Filter Dropdown */}
+              {/* Patrón Filter Dropdown */}
               <div className="flex items-center space-x-1.5 bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-xs">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Matrícula:</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Patrón:</span>
                 <select
                   value={filtroPatente}
                   onChange={(e) => setFiltroPatente(e.target.value)}
@@ -3067,7 +3067,7 @@ export default function App() {
                   <tr>
                     <th className="px-6 py-4">Fecha</th>
                     <th className="px-6 py-4">N° Serv</th>
-                    <th className="px-6 py-4">Matrícula</th>
+                    <th className="px-6 py-4">Patrón</th>
                     <th className="px-6 py-4">Cliente / Razón Social</th>
                     <th className="px-6 py-4">Región / Comuna</th>
                     <th className="px-6 py-4">Servicio Realizado</th>
@@ -3464,7 +3464,7 @@ export default function App() {
 
                   <div>
                     <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                      Matrícula / Patente *
+                      Patrón *
                     </label>
                     <div className="relative">
                       <Truck className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
